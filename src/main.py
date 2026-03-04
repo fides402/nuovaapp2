@@ -21,7 +21,7 @@ class SwerveRecommender:
                 tracks.append(track_info)
         return tracks
 
-    def get_recommendations_for_track(self, track_uri: str, num_recommendations: int = 10) -> List[Dict]:
+    def get_recommendations_for_track(self, track_uri: str, num_recommendations: int = 10, exclude_ids: set = None) -> List[Dict]:
         track_info = self.spotify.get_track_info(track_uri)
         if not track_info:
             return []
@@ -32,7 +32,9 @@ class SwerveRecommender:
         varied_queries = self.gemini.generate_varied_queries(track_info, num_variations=5)
 
         all_recommendations = []
-        seen_ids = set()
+        seen_ids = set(exclude_ids or {})
+        # Also exclude the input track itself
+        seen_ids.add(track_info['id'])
 
         for query in varied_queries:
             spotify_results = self.spotify.search_tracks(query, limit=15)
@@ -64,20 +66,31 @@ class SwerveRecommender:
     def get_recommendations_from_playlist(self, track_uris: List[str], recommendations_per_track: int = 5) -> Dict:
         tracks = self.load_tracks_from_list(track_uris)
         
+        # Get IDs and names of input tracks to exclude from recommendations
+        input_track_ids = {track['id'] for track in tracks}
+        input_track_names_lower = {track['name'].lower() for track in tracks}
+        input_artists_lower = {track['artist'].lower() for track in tracks}
+        
         all_spotify = []
         all_discogs = []
-        seen_spotify = set()
+        seen_spotify = set(input_track_ids)  # Start with input track IDs to exclude them
 
         for track in tracks:
             recs = self.get_recommendations_for_track(
                 f"spotify:track:{track['id']}", 
-                num_recommendations=recommendations_per_track
+                num_recommendations=recommendations_per_track,
+                exclude_ids=seen_spotify
             )
             
             if recs:
-                all_spotify.extend([t for t in recs.get("spotify_recommendations", []) 
-                                   if t["id"] not in seen_spotify])
-                seen_spotify.add(t["id"])
+                # Filter out: input tracks, duplicates, same title, same artist
+                new_spotify = [t for t in recs.get("spotify_recommendations", []) 
+                              if t["id"] not in seen_spotify
+                              and t.get("name", "").lower() not in input_track_names_lower
+                              and t.get("artist", "").lower() not in input_artists_lower]
+                for t in new_spotify:
+                    seen_spotify.add(t["id"])
+                all_spotify.extend(new_spotify)
                 all_discogs.extend(recs.get("discogs_rare_releases", []))
 
         all_spotify.sort(key=lambda x: x.get("popularity", 100))
