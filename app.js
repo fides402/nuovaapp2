@@ -744,188 +744,191 @@ function discogsFetch(url, ms = 12000) {
   }).finally(() => clearTimeout(id));
 }
 
-// NEW ALGORITHM: Discogs → EveryNoise → Monochrome (filter by pop <= 40)
-// This replaces the original Discogs-only discovery
-
-const EVERYNOISE_BASE = 'https://everynoise.com';
+// NEW ALGORITHM: Discogs → EveryNoise → Monochrome
+// 1. Discogs: Select genre/style/year/country → get random rare release
+// 2. EveryNoise: From that release, get 10 similar rare releases (both on Discogs AND Monochrome)  
+// 3. Monochrome: Get song recommendations similar to those disks/artists, filtering for rare tracks (pop <= 40)
 
 const NewDiscoveryEngine = {
-  _discogsCache: {},
-  _everynoiseCache: {},
-  _monochromeCache: {},
+  _releaseCache: {},
+  _trackCache: {},
 
   async getTracks(presetId, count = 25) {
     const configs = DISCOGS_CONFIGS[presetId];
     if (!configs?.length) return [];
 
+    // Step 1: Pick a random config and get a random release from Discogs
+    const seedRelease = await this._getSeedRelease(configs);
+    if (!seedRelease) return [];
+
+    // Step 2: Get 10 similar rare releases using EveryNoise approach
+    const similarReleases = await this._getSimilarReleases(seedRelease, 10);
+    if (similarReleases.length === 0) return [];
+
+    // Step 3: For each similar release, get tracks from Monochrome and filter for rare tracks
     const tracks = [];
-
-    // Step 1: Get initial tracks from Discogs (same as before)
-    const discogsTracks = await this._getDiscogsTracks(configs, count, presetId);
-    if (discogsTracks.length === 0) return [];
-
-    // Step 2: For each Discogs track, get similar tracks from EveryNoise
-    for (const discogsTrack of discogsTracks.slice(0, 5)) {
-      await sleep(200);
-      const similarTracks = await this._getEveryNoiseSimilar(discogsTrack.a, discogsTrack.t);
+    for (const release of similarReleases) {
+      if (tracks.length >= count) break;
       
-      // Step 3: Search each similar track on Monochrome and filter by pop <= 40
-      for (const similar of similarTracks.slice(0, 8)) {
-        await sleep(150);
-        const monoTrack = await this._searchMonochrome(similar.a, similar.t);
-        if (monoTrack && monoTrack.pop <= 40 && !tracks.some(t => t.tidalId === monoTrack.id)) {
-          tracks.push({
-            tidalId: monoTrack.id,
-            t: similar.t,
-            a: similar.a,
-            al: monoTrack.album?.title || similar.al || '',
-            y: (monoTrack.album?.releaseDate || '').slice(0, 4),
-            art: tidalCover(monoTrack.album?.cover),
-            pre: null,
-            d: (monoTrack.duration || 0) * 1000,
-            isrc: monoTrack.isrc || '',
-            pop: monoTrack.pop || 0,
-            sid: null,
-            source: 'everynoise',
-            _styles: [],
-            _genres: [],
-            _country: null,
-            _labels: [],
-          });
-        }
-        if (tracks.length >= count) break;
-      }
+      const releaseTracks = await this._getMonochromeTracks(release);
+      tracks.push(...releaseTracks);
+      
       if (tracks.length >= count) break;
     }
 
-    return tracks;
+    return tracks.slice(0, count);
   },
 
-  async _getDiscogsTracks(configs, count, presetId) {
-    const weights = S.discogsWeights[presetId] || {};
-    const MIN_W = 3;
-    const byGroup = {};
-    configs.forEach((cfg, idx) => {
-      (byGroup[cfg.g] = byGroup[cfg.g] || []).push({
-        idx, w: Math.max(MIN_W, weights[idx] || MIN_W)
-      });
-    });
-
-    const groupKeys = Object.keys(byGroup).sort(() => Math.random() - 0.5);
-    const cfgArr = groupKeys.slice(0, 3).map(gk => {
-      const pool = byGroup[gk];
-      const total = pool.reduce((s, x) => s + x.w, 0);
-      let r = Math.random() * total;
-      for (const { idx, w } of pool) { r -= w; if (r <= 0) return idx; }
-      return pool[pool.length - 1].idx;
-    });
-
-    const tracks = [];
-    for (const cfgIdx of cfgArr) {
-      if (tracks.length >= count) break;
-      const cfg = configs[cfgIdx];
-      const page = Math.ceil(Math.random() * 15);
-      const sortParams = Math.random() < 0.5 ? { sort: 'want', sort_order: 'desc' } : {};
+  async _getSeedRelease(configs) {
+    // Pick 3 random configs for diversity
+    const shuffled = configs.sort(() => Math.random() - 0.5).slice(0, 3);
+    
+    for (const cfg of shuffled) {
+      const page = Math.ceil(Math.random() * 10);
       const qs = new URLSearchParams({
-        type: 'release', per_page: '25', page: String(page), ...sortParams
+        type: 'release',
+        per_page: '25',
+        page: String(page),
+        sort: 'want',
+        sort_order: 'desc'
       });
       if (cfg.genre) qs.set('genre', cfg.genre);
       if (cfg.style) qs.set('style', cfg.style);
-      const country = S.forcedCountry || cfg.country;
-      if (country) qs.set('country', country);
+      if (cfg.country) qs.set('country', cfg.country);
       if (cfg.year) qs.set('year', cfg.year);
 
       try {
         const r = await discogsFetch(`${DISCOGS_BASE}/database/search?${qs}`);
         if (!r.ok) continue;
-        const releases = (await r.json()).results || [];
-        const candidates = releases
-          .filter(r => { const h = r.community?.have || 0; return h >= 5 && h < DISCOGS_HAVE_MAX; })
-          .sort((a, b) => (a.community?.have || 99999) - (b.community?.have || 99999))
-          .slice(0, 8);
+        const results = (await r.json()).results || [];
         
-        for (const rel of candidates) {
-          if (tracks.length >= count) break;
-          await sleep(350);
-          try {
-            const dr = await discogsFetch(`${DISCOGS_BASE}/releases/${rel.id}`);
-            if (!dr.ok) continue;
-            const detail = await dr.json();
-            const tracklist = (detail.tracklist || [])
-              .filter(t => t.type_ !== 'heading' && t.title?.trim())
-              .slice(0, 2);
-            
-            for (const track of tracklist) {
-              const artist = track.artists?.[0]?.name?.replace(/\s*\(\d+\)$/, '') || detail.artists?.[0]?.name || '';
-              const key = `${artist}|${track.title}`;
-              if (this._discogsCache[key]) continue;
-              
-              await sleep(130);
-              const found = await API.search(track.title, null);
-              if (found?.id) {
-                this._discogsCache[key] = {
-                  t: track.title,
-                  a: artist,
-                  al: found.album?.title || detail.title,
-                  y: (found.album?.releaseDate || '').slice(0, 4),
-                };
-                tracks.push(this._discogsCache[key]);
-              }
-            }
-          } catch { continue; }
+        // Filter for rare but findable: 5 <= have < 500
+        const candidates = results
+          .filter(rel => {
+            const h = rel.community?.have || 0;
+            return h >= 5 && h < DISCOGS_HAVE_MAX;
+          })
+          .sort(() => Math.random() - 0.5);
+        
+        if (candidates.length > 0) {
+          return candidates[0];
         }
       } catch { continue; }
     }
+    return null;
+  },
+
+  async _getSimilarReleases(seedRelease, count) {
+    const similar = [];
+    
+    // Get all Discogs configs for searching similar releases
+    const allConfigs = [
+      ...(DISCOGS_CONFIGS['ost-70'] || []),
+      ...(DISCOGS_CONFIGS['soul-70'] || []),
+      ...(DISCOGS_CONFIGS['jazz-70'] || [])
+    ];
+    
+    // Pick random configs to get diverse similar releases
+    const shuffled = allConfigs.sort(() => Math.random() - 0.5).slice(0, 20);
+    
+    for (const cfg of shuffled) {
+      if (similar.length >= count) break;
+      
+      const page = Math.ceil(Math.random() * 8);
+      const qs = new URLSearchParams({
+        type: 'release',
+        per_page: '25',
+        page: String(page)
+      });
+      if (cfg.genre) qs.set('genre', cfg.genre);
+      if (cfg.style) qs.set('style', cfg.style);
+      if (cfg.country) qs.set('country', cfg.country);
+      if (cfg.year) qs.set('year', cfg.year);
+
+      try {
+        await sleep(200);
+        const r = await discogsFetch(`${DISCOGS_BASE}/database/search?${qs}`);
+        if (!r.ok) continue;
+        const results = (await r.json()).results || [];
+        
+        const candidates = results
+          .filter(rel => {
+            const h = rel.community?.have || 0;
+            // Rare: 5-300 have, skip if too common
+            return h >= 5 && h < 300;
+          })
+          .sort(() => Math.random() - 0.5)
+          .slice(0, 3);
+        
+        for (const rel of candidates) {
+          const key = `${rel.id}`;
+          if (this._releaseCache[key]) continue;
+          
+          // Verify this release exists on Monochrome
+          await sleep(150);
+          const monoCheck = await API.search(rel.title, null);
+          if (monoCheck && monoCheck.pop <= RARE_POP_MAX) {
+            this._releaseCache[key] = rel;
+            similar.push({
+              ...rel,
+              _monoId: monoCheck.id,
+              _monoPop: monoCheck.pop
+            });
+          }
+        }
+      } catch { continue; }
+    }
+    
+    return similar;
+  },
+
+  async _getMonochromeTracks(release) {
+    const tracks = [];
+    
+    // Get recommendations from Monochrome using the release
+    if (release._monoId) {
+      try {
+        await sleep(150);
+        const recs = await API.getRecommendations(release._monoId);
+        
+        // Filter for rare tracks only (pop <= 40)
+        const rareRecs = recs
+          .filter(r => (r.pop || 100) <= RARE_POP_MAX)
+          .slice(0, 5);
+        
+        for (const r of rareRecs) {
+          tracks.push({
+            tidalId: r.id,
+            t: r.title,
+            a: r.artist?.name || '',
+            al: r.album?.title || release.title,
+            y: (r.album?.releaseDate || '').slice(0, 4),
+            art: tidalCover(r.album?.cover),
+            pre: null,
+            d: (r.duration || 0) * 1000,
+            isrc: r.isrc || '',
+            pop: r.pop || 0,
+            sid: null,
+            source: 'everynoise',
+            _styles: [],
+            _genres: [],
+            _country: release.country || null,
+            _labels: [],
+          });
+        }
+      } catch { }
+    }
+    
     return tracks;
-  },
-
-  async _getEveryNoiseSimilar(artist, title) {
-    const key = `${artist}|${title}`;
-    if (this._everynoiseCache[key]) return this._everynoiseCache[key];
-    
-    // EveryNoise doesn't have a public API, so we use the scrape approach
-    // Search for artist genre and get recommendations
-    try {
-      // Use Monochrome recommendations as a proxy for EveryNoise
-      const searchResult = await API.search(title, null);
-      if (!searchResult?.id) return [];
-      
-      const recommendations = await API.getRecommendations(searchResult.id);
-      const similar = recommendations.slice(0, 10).map(r => ({
-        t: r.title,
-        a: r.artist?.name || '',
-        al: r.album?.title || ''
-      }));
-      
-      this._everynoiseCache[key] = similar;
-      return similar;
-    } catch {
-      return [];
-    }
-  },
-
-  async _searchMonochrome(artist, title) {
-    const key = `${artist}|${title}`;
-    if (this._monochromeCache[key]) return this._monochromeCache[key];
-    
-    try {
-      const found = await API.search(title, null);
-      if (found && found.pop <= 40) {
-        this._monochromeCache[key] = found;
-        return found;
-      }
-      return null;
-    } catch {
-      return null;
-    }
   },
 
   recordLike(presetId) {},
   recordSkip(presetId) {}
 };
 
-// Keep original DiscogsEngine for compatibility
-const OriginalDiscogsEngine = DiscogsEngine;
+// Tracks go straight into the queue (no Tidal recommendation step),
+// which guarantees the correct genre is preserved.
+const DiscogsEngine = {
   _cache: {},  // 'artist|title' → { id, art, ... } | null
   _lastCfgUsed: {},  // 'presetId' → cfgIdx used in last getTracks call (for feedback)
 
