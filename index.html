@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swerve - Rare Music Recommender</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: 'Segoe UI', system-ui, sans-serif; 
+            background: #0a0a0a; 
+            color: #fff;
+            min-height: 100vh;
+        }
+        .container { max-width: 900px; margin: 0 auto; padding: 2rem; }
+        h1 { 
+            font-size: 2.5rem; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        .subtitle { color: #888; margin-bottom: 2rem; }
+        
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 2rem;
+        }
+        input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #333;
+            border-radius: 12px;
+            background: #1a1a1a;
+            color: #fff;
+            font-size: 1rem;
+        }
+        input:focus { outline: none; border-color: #667eea; }
+        button {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover { transform: scale(1.02); }
+        
+        .results { display: grid; gap: 1rem; }
+        .track-card {
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #333;
+        }
+        .track-info h3 { margin-bottom: 0.3rem; }
+        .track-info p { color: #888; font-size: 0.9rem; }
+        .rarity { 
+            padding: 5px 12px; 
+            border-radius: 20px; 
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        .rare { background: #22c55e20; color: #22c55e; }
+        .popular { background: #f59e0b20; color: #f59e0b; }
+        
+        .loading { text-align: center; padding: 2rem; color: #888; }
+        .error { background: #ef444420; color: #ef4444; padding: 1rem; border-radius: 12px; }
+        
+        .vibe { 
+            background: #667eea20; 
+            padding: 1rem; 
+            border-radius: 12px; 
+            margin-bottom: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Swerve</h1>
+        <p class="subtitle">Rare Music Recommender powered by AI</p>
+        
+        <div class="search-box">
+            <input type="text" id="trackUri" placeholder="Inserisci Spotify Track URI (es. spotify:track:...)">
+            <button onclick="getRecommendations()">Cerca</button>
+        </div>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const SPOTIFY_CLIENT_ID = "5d04043e27d04cee91b233ab4e7791fc";
+        const SPOTIFY_CLIENT_SECRET = "14dce712909a4311986a2c86dfae9848";
+        
+        let accessToken = null;
+        
+        async function getSpotifyToken() {
+            const response = await fetch("https://accounts.spotify.com/api/token", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Authorization": "Basic " + btoa(SPOTIFY_CLIENT_ID + ":" + SPOTIFY_CLIENT_SECRET)
+                },
+                body: "grant_type=client_credentials"
+            });
+            const data = await response.json();
+            accessToken = data.access_token;
+        }
+        
+        async function getRecommendations() {
+            const uri = document.getElementById('trackUri').value.trim();
+            const results = document.getElementById('results');
+            
+            if (!uri) {
+                results.innerHTML = '<div class="error">Inserisci un Spotify Track URI</div>';
+                return;
+            }
+            
+            results.innerHTML = '<div class="loading">Analizzando e cercando tracce rare...</div>';
+            
+            if (!accessToken) await getSpotifyToken();
+            
+            const trackId = uri.replace('spotify:track:', '');
+            
+            try {
+                const trackRes = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+                    headers: { "Authorization": "Bearer " + accessToken }
+                });
+                
+                if (!trackRes.ok) throw new Error("Traccia non trovata");
+                
+                const track = await trackRes.json();
+                
+                const searchQueries = [
+                    `rare ${track.artists[0].name} obscure`,
+                    `${track.artists[0].name} underground vinyl`,
+                    `rare bossanova ${track.artists[0].name}`,
+                    `lost jazz ${track.artists[0].name}`,
+                    `vintage soul ${track.artists[0].name}`
+                ];
+                
+                let allTracks = [];
+                
+                for (const query of searchQueries) {
+                    const searchRes = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=15`, {
+                        headers: { "Authorization": "Bearer " + accessToken }
+                    });
+                    const searchData = await searchRes.json();
+                    if (searchData.tracks) {
+                        allTracks = [...allTracks, ...searchData.tracks.items];
+                    }
+                }
+                
+                const uniqueTracks = [];
+                const seen = new Set();
+                for (const t of allTracks) {
+                    if (!seen.has(t.id) && t.id !== trackId) {
+                        seen.add(t.id);
+                        uniqueTracks.push(t);
+                    }
+                }
+                
+                uniqueTracks.sort((a, b) => a.popularity - b.popularity);
+                
+                results.innerHTML = `
+                    <div class="vibe">
+                        <strong>Analizzando:</strong> ${track.name} - ${track.artists[0].name}
+                    </div>
+                    <h2>${uniqueTracks.length} Rare Tracks Trovate</h2>
+                    <div class="results">
+                        ${uniqueTracks.slice(0, 20).map(t => `
+                            <div class="track-card">
+                                <div class="track-info">
+                                    <h3>${t.name}</h3>
+                                    <p>${t.artists[0].name} • ${t.album.name}</p>
+                                </div>
+                                <span class="rarity ${t.popularity < 30 ? 'rare' : 'popular'}">
+                                    ${t.popularity < 30 ? 'RARA' : 'pop: ' + t.popularity}
+                                </span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                
+            } catch (err) {
+                results.innerHTML = `<div class="error">Errore: ${err.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
