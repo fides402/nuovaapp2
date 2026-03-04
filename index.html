@@ -27,6 +27,19 @@
             gap: 10px;
             margin-bottom: 2rem;
         }
+        textarea {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #333;
+            border-radius: 12px;
+            background: #1a1a1a;
+            color: #fff;
+            font-size: 1rem;
+            min-height: 120px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        textarea:focus { outline: none; border-color: #667eea; }
         input {
             flex: 1;
             padding: 15px 20px;
@@ -79,6 +92,25 @@
             border-radius: 12px; 
             margin-bottom: 2rem;
         }
+        
+        .input-tracks {
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 2rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .input-tracks h4 { color: #888; margin-bottom: 0.5rem; }
+        .input-track {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem;
+            border-bottom: 1px solid #333;
+            font-size: 0.9rem;
+        }
+        
+        .helper { color: #666; font-size: 0.85rem; margin-top: 0.5rem; }
     </style>
 </head>
 <body>
@@ -87,8 +119,14 @@
         <p class="subtitle">Rare Music Recommender powered by AI</p>
         
         <div class="search-box">
-            <input type="text" id="trackUri" placeholder="Inserisci Spotify Track URI (es. spotify:track:...)">
+            <textarea id="trackUris" placeholder="Inserisci Spotify Track URI (uno per riga o separati da virgola)&#10;&#10;Es:&#10;spotify:track:6wOJ0H5NRT6P45LKqyjlah&#10;spotify:track:5gfuPRh2118jWEhuH1tdHw"></textarea>
             <button onclick="getRecommendations()">Cerca</button>
+        </div>
+        <p class="helper">Inserisci i brani dalla tua playlist preferiti - il sistema troverà brani SIMILI ma diversi</p>
+        
+        <div id="inputTracks" class="input-tracks" style="display:none;">
+            <h4>Playlist analizzata:</h4>
+            <div id="inputTracksList"></div>
         </div>
         
         <div id="results"></div>
@@ -114,41 +152,86 @@
         }
         
         async function getRecommendations() {
-            const uri = document.getElementById('trackUri').value.trim();
+            const uriInput = document.getElementById('trackUris').value.trim();
             const results = document.getElementById('results');
             
-            if (!uri) {
-                results.innerHTML = '<div class="error">Inserisci un Spotify Track URI</div>';
+            if (!uriInput) {
+                results.innerHTML = '<div class="error">Inserisci almeno un Spotify Track URI</div>';
                 return;
             }
             
-            results.innerHTML = '<div class="loading">Analizzando e cercando tracce rare...</div>';
+            // Parse track URIs
+            const trackUris = uriInput.split(/[\n,]/).map(u => u.trim()).filter(u => u.startsWith('spotify:track:'));
+            
+            if (trackUris.length === 0) {
+                results.innerHTML = '<div class="error">Nessun Spotify Track URI valido trovato</div>';
+                return;
+            }
+            
+            results.innerHTML = '<div class="loading">Analizzando la playlist e cercando tracce simili...</div>';
             
             if (!accessToken) await getSpotifyToken();
             
-            const trackId = uri.replace('spotify:track:', '');
-            
             try {
-                const trackRes = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
-                    headers: { "Authorization": "Bearer " + accessToken }
-                });
+                // Get all input tracks info
+                const inputTracks = [];
+                const inputTrackIds = new Set();
+                const inputArtistNames = new Set();
+                const inputTrackNames = new Set();
                 
-                if (!trackRes.ok) throw new Error("Traccia non trovata");
+                for (const uri of trackUris) {
+                    const trackId = uri.replace('spotify:track:', '');
+                    try {
+                        const trackRes = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+                            headers: { "Authorization": "Bearer " + accessToken }
+                        });
+                        if (trackRes.ok) {
+                            const track = await trackRes.json();
+                            inputTracks.push(track);
+                            inputTrackIds.add(track.id);
+                            inputArtistNames.add(track.artists[0].name.toLowerCase());
+                            inputTrackNames.add(track.name.toLowerCase());
+                        }
+                    } catch (e) {
+                        console.error("Error fetching track:", trackId, e);
+                    }
+                }
                 
-                const track = await trackRes.json();
+                if (inputTracks.length === 0) {
+                    results.innerHTML = '<div class="error">Nessun brano trovato</div>';
+                    return;
+                }
+                
+                // Show input tracks
+                document.getElementById('inputTracks').style.display = 'block';
+                document.getElementById('inputTracksList').innerHTML = inputTracks.map(t => 
+                    `<div class="input-track">
+                        <span>${t.name} - ${t.artists[0].name}</span>
+                        <span style="color:#666">${t.album.name}</span>
+                    </div>`
+                ).join('');
+                
+                // Analyze vibe and create queries based on the playlist
+                const mainArtist = inputTracks[0].artists[0].name;
+                const genre = detectGenre(inputTracks);
                 
                 const searchQueries = [
-                    `rare ${track.artists[0].name} obscure`,
-                    `${track.artists[0].name} underground vinyl`,
-                    `rare bossanova ${track.artists[0].name}`,
-                    `lost jazz ${track.artists[0].name}`,
-                    `vintage soul ${track.artists[0].name}`
+                    `rare ${genre} obscure underground vinyl`,
+                    `lost ${genre} 1970s vintage`,
+                    `rare bossanova obscure`,
+                    `forgotten jazz fusion rare`,
+                    `library music rare groove`,
+                    `underground soul rare vinyl`,
+                    `rare ${genre} 1960s 1970s`,
+                    `obscure ${genre} international`,
+                    `rare latin jazz obscure`,
+                    `forgotten pop rare vinyl`
                 ];
                 
                 let allTracks = [];
                 
                 for (const query of searchQueries) {
-                    const searchRes = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=15`, {
+                    const searchRes = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=20`, {
                         headers: { "Authorization": "Bearer " + accessToken }
                     });
                     const searchData = await searchRes.json();
@@ -157,10 +240,26 @@
                     }
                 }
                 
+                // Filter: exclude input tracks, same titles, same artists
                 const uniqueTracks = [];
                 const seen = new Set();
+                
                 for (const t of allTracks) {
-                    if (!seen.has(t.id) && t.id !== trackId) {
+                    const artistLower = t.artists[0].name.toLowerCase();
+                    const nameLower = t.name.toLowerCase();
+                    
+                    // Skip if: same ID, same artist, or very similar name
+                    if (inputTrackIds.has(t.id)) continue;
+                    if (inputArtistNames.has(artistLower)) continue;
+                    if (inputTrackNames.has(nameLower)) continue;
+                    
+                    // Skip if artist name appears in input (might be same track)
+                    const isSameArtist = Array.from(inputArtistNames).some(ia => 
+                        artistLower.includes(ia) || ia.includes(artistLower)
+                    );
+                    if (isSameArtist && inputTracks.length < 5) continue; // Only strict filter for small playlists
+                    
+                    if (!seen.has(t.id)) {
                         seen.add(t.id);
                         uniqueTracks.push(t);
                     }
@@ -170,11 +269,13 @@
                 
                 results.innerHTML = `
                     <div class="vibe">
-                        <strong>Analizzando:</strong> ${track.name} - ${track.artists[0].name}
+                        <strong>Playlist analizzata:</strong> ${inputTracks.length} brani<br>
+                        <strong>Genere rilevato:</strong> ${genre}<br>
+                        <strong>Brani simili trovati:</strong> ${uniqueTracks.length}
                     </div>
-                    <h2>${uniqueTracks.length} Rare Tracks Trovate</h2>
+                    <h2>Rare Tracks Simili</h2>
                     <div class="results">
-                        ${uniqueTracks.slice(0, 20).map(t => `
+                        ${uniqueTracks.slice(0, 30).map(t => `
                             <div class="track-card">
                                 <div class="track-info">
                                     <h3>${t.name}</h3>
@@ -191,6 +292,28 @@
             } catch (err) {
                 results.innerHTML = `<div class="error">Errore: ${err.message}</div>`;
             }
+        }
+        
+        function detectGenre(tracks) {
+            // Simple genre detection based on artist names and track characteristics
+            const allNames = tracks.map(t => t.name + ' ' + t.artists[0].name).join(' ').toLowerCase();
+            
+            if (allNames.includes('bossa') || allNames.includes('jazz') || allNames.includes('samba')) {
+                return 'bossa nova jazz';
+            }
+            if (allNames.includes('soul') || allNames.includes('funk')) {
+                return 'soul funk';
+            }
+            if (allNames.includes('rock') || allNames.includes('pop')) {
+                return 'rock pop';
+            }
+            if (allNames.includes('latin') || allNames.includes('español') || allNames.includes('italiano')) {
+                return 'latin italian';
+            }
+            if (allNames.includes('classical') || allNames.includes('orchestra')) {
+                return 'classical orchestral';
+            }
+            return 'vintage soul jazz';
         }
     </script>
 </body>
