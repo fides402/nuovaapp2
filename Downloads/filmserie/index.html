@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fidelix — Scopri gemme nascoste</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── HERO / FORM ─────────────────────────────────────────────────────── -->
+  <section id="hero-section">
+    <div class="hero-inner">
+      <h1 class="logo">FIDELIX</h1>
+      <p class="tagline">Film e serie che non sai ancora di voler vedere.</p>
+
+      <form id="searchForm" class="search-form" autocomplete="off" novalidate>
+
+        <div class="field-group">
+          <label>Film o serie che hai amato <span class="req">*</span></label>
+          <div class="tag-input-wrapper" id="tagWrapper">
+            <div id="tags"></div>
+            <input
+              type="text"
+              id="referenceInput"
+              placeholder="Scrivi un titolo e premi Invio…"
+              maxlength="120"
+              aria-label="Film di riferimento"
+            />
+          </div>
+          <p class="field-hint">Aggiungi fino a 3 titoli che ti hanno colpito</p>
+        </div>
+
+        <div class="fields-row">
+          <div class="field-group">
+            <label for="mood">Come ti senti stasera?</label>
+            <input type="text" id="mood" placeholder="teso, malinconico, adrenalinico…" />
+          </div>
+          <div class="field-group">
+            <label for="avoid">Cosa vuoi evitare?</label>
+            <input type="text" id="avoid" placeholder="horror, commedie romantiche…" />
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label for="language">Preferenza lingua / area geografica</label>
+          <input type="text" id="language" placeholder="italiano, asiatico, europeo…" />
+        </div>
+
+        <button type="submit" id="searchBtn" class="btn-primary">
+          Scopri le tue gemme
+        </button>
+
+      </form>
+    </div>
+  </section>
+
+  <!-- ── LOADING ─────────────────────────────────────────────────────────── -->
+  <section id="loading-section" hidden>
+    <div class="loading-inner">
+      <div class="logo-pulse">FIDELIX</div>
+      <p class="loading-text">Stiamo cercando le tue gemme nascoste…</p>
+      <p class="loading-sub">L'AI analizza migliaia di titoli · 5–10 secondi</p>
+    </div>
+  </section>
+
+  <!-- ── ERROR ───────────────────────────────────────────────────────────── -->
+  <section id="error-section" hidden>
+    <div class="error-inner">
+      <div class="error-icon">✕</div>
+      <p class="error-msg" id="errorMsg"></p>
+      <button class="btn-secondary" id="retryBtn">Riprova</button>
+    </div>
+  </section>
+
+  <!-- ── RESULTS ─────────────────────────────────────────────────────────── -->
+  <section id="results-section" hidden>
+    <div class="results-inner">
+
+      <div class="results-header">
+        <div>
+          <h2 class="section-title">Film consigliati</h2>
+          <p class="results-sub">Basati su: <em id="refFilmsLabel"></em></p>
+        </div>
+        <button class="btn-secondary" id="newSearchBtn">Nuova ricerca</button>
+      </div>
+      <div id="filmsGrid" class="cards-grid"></div>
+
+      <h2 class="section-title section-title--spaced">Serie TV consigliate</h2>
+      <div id="seriesGrid" class="cards-grid"></div>
+
+      <div class="results-footer">
+        <button class="btn-secondary" id="newSearchBtn2">↑ Nuova ricerca</button>
+      </div>
+
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

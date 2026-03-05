@@ -1,0 +1,8 @@
+{
+  "name": "fidelix",
+  "version": "1.0.0",
+  "description": "Scopri gemme nascoste del cinema e della TV",
+  "engines": {
+    "node": ">=18"
+  }
+}
