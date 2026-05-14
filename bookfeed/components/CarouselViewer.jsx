@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import SlideRenderer from "./SlideRenderer";
+import Pinchable from "./Pinchable";
 import { exportCarouselAsPdf, exportCarouselAsZipPng, exportSlideAsPng } from "../lib/exporter";
 
 export default function CarouselViewer({ carousel, book, onClose, onDelete }) {
@@ -11,7 +12,6 @@ export default function CarouselViewer({ carousel, book, onClose, onDelete }) {
   const [busy, setBusy] = useState(null);
   // Refs to the export-quality (hidden, fixed-size) slides.
   const exportRefs = useRef([]);
-  const touch = useRef({ x: 0, y: 0 });
 
   const slides = carousel?.slides || [];
 
@@ -24,6 +24,9 @@ export default function CarouselViewer({ carousel, book, onClose, onDelete }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [slides.length, onClose]);
+
+  function goNext() { setIdx((i) => Math.min(slides.length - 1, i + 1)); }
+  function goPrev() { setIdx((i) => Math.max(0, i - 1)); }
 
   const tags = carousel?.tags || [];
 
@@ -43,20 +46,6 @@ export default function CarouselViewer({ carousel, book, onClose, onDelete }) {
       alert("Errore export: " + e.message);
     } finally {
       setBusy(null);
-    }
-  }
-
-  function onTouchStart(e) {
-    const t = e.touches[0];
-    touch.current = { x: t.clientX, y: t.clientY };
-  }
-  function onTouchEnd(e) {
-    const t = e.changedTouches[0];
-    const dx = t.clientX - touch.current.x;
-    const dy = t.clientY - touch.current.y;
-    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
-      if (dx < 0) setIdx((i) => Math.min(slides.length - 1, i + 1));
-      else setIdx((i) => Math.max(0, i - 1));
     }
   }
 
@@ -114,21 +103,19 @@ export default function CarouselViewer({ carousel, book, onClose, onDelete }) {
         </div>
 
         {/* Visible slide */}
-        <div
-          className="relative max-w-[420px] mx-auto select-none"
-          onTouchStart={onTouchStart}
-          onTouchEnd={onTouchEnd}
-        >
-          {current && (
-            <SlideRenderer
-              slide={current}
-              index={idx}
-              total={slides.length}
-              bookTitle={book?.title}
-              bookAuthor={book?.author}
-              invert={invert}
-            />
-          )}
+        <div className="relative max-w-[460px] mx-auto">
+          <Pinchable resetKey={idx} onSwipeLeft={goNext} onSwipeRight={goPrev}>
+            {current && (
+              <SlideRenderer
+                slide={current}
+                index={idx}
+                total={slides.length}
+                bookTitle={book?.title}
+                bookAuthor={book?.author}
+                invert={invert}
+              />
+            )}
+          </Pinchable>
 
           {/* Progress dots */}
           <div className="flex items-center justify-center gap-1.5 mt-5">
@@ -146,12 +133,18 @@ export default function CarouselViewer({ carousel, book, onClose, onDelete }) {
             ))}
           </div>
 
+          <div className="text-center mt-2 text-[10px] uppercase tracking-[0.22em] text-muted">
+            <span className="hidden sm:inline">scroll + ctrl o doppio click per zoom · </span>
+            <span className="sm:hidden">pinch o doppio tap per zoom · </span>
+            swipe o frecce per navigare
+          </div>
+
           {/* Nav arrows (desktop) */}
           <div className="hidden sm:flex absolute inset-y-0 -left-14 items-center">
-            <button onClick={() => setIdx((i) => Math.max(0, i - 1))} className="btn btn-ghost w-10 h-10 p-0">←</button>
+            <button onClick={goPrev} className="btn btn-ghost w-10 h-10 p-0">←</button>
           </div>
           <div className="hidden sm:flex absolute inset-y-0 -right-14 items-center">
-            <button onClick={() => setIdx((i) => Math.min(slides.length - 1, i + 1))} className="btn btn-ghost w-10 h-10 p-0">→</button>
+            <button onClick={goNext} className="btn btn-ghost w-10 h-10 p-0">→</button>
           </div>
         </div>
 

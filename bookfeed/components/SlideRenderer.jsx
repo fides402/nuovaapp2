@@ -58,24 +58,24 @@ function clamp(s, max) {
 }
 
 // Headline font scale (in container-query units) based on character count.
+// Tuned so that a typical mobile canvas (~480px tall) yields >=18px body
+// and >=22px headlines — comfortably readable without zoom.
 function headlineScale(len, big) {
-  const base = big ? 1.15 : 1.0;
-  // Returns font-size as a fraction of canvas height. Canvas is 4:5 so
-  // width = 0.8 * height; using cqh works well for fixed export size too.
-  if (len <= 28) return 7.2 * base;
-  if (len <= 50) return 5.6 * base;
-  if (len <= 80) return 4.4 * base;
-  if (len <= 120) return 3.4 * base;
-  if (len <= 180) return 2.8 * base;
-  return 2.4 * base;
+  const base = big ? 1.12 : 1.0;
+  if (len <= 28) return 9.0 * base;
+  if (len <= 50) return 7.0 * base;
+  if (len <= 80) return 5.5 * base;
+  if (len <= 120) return 4.5 * base;
+  if (len <= 180) return 3.7 * base;
+  return 3.2 * base;
 }
 
-// Body font scale
+// Body font scale — never goes below ~16px on a 480px-tall canvas.
 function bodyScale(len) {
-  if (len <= 100) return 2.6;
-  if (len <= 160) return 2.3;
-  if (len <= 220) return 2.05;
-  return 1.9;
+  if (len <= 100) return 4.2;
+  if (len <= 160) return 3.8;
+  if (len <= 220) return 3.4;
+  return 3.1;
 }
 
 const SlideRenderer = forwardRef(function SlideRenderer(
@@ -97,15 +97,15 @@ const SlideRenderer = forwardRef(function SlideRenderer(
       className={`slide-canvas ${invert ? "light" : ""}`}
       style={{ containerType: "size" }}
     >
-      <div className="absolute inset-0 flex flex-col p-[6.5cqh] pb-[5.5cqh]">
+      <div className="absolute inset-0 flex flex-col p-[6cqh] pb-[5cqh]">
         {/* Header */}
-        <div className="shrink-0 flex items-center justify-between text-[1.7cqh] tracking-[0.18em] uppercase opacity-70">
+        <div className="shrink-0 flex items-center justify-between text-[2.2cqh] tracking-[0.18em] uppercase opacity-75">
           <span className="truncate max-w-[60%]">{kicker}</span>
           <span>{String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}</span>
         </div>
 
         {/* Main */}
-        <div className="flex-1 min-h-0 overflow-hidden flex flex-col justify-center mt-[4cqh] mb-[3cqh]">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col justify-center mt-[3.5cqh] mb-[3cqh]">
           {layout === "hero" && <Hero title={title} body={body} note={note} />}
           {layout === "split" && <Split title={title} body={body} note={note} />}
           {layout === "stamp" && <Stamp title={title} body={body} note={note} role={role} />}
@@ -115,7 +115,7 @@ const SlideRenderer = forwardRef(function SlideRenderer(
         </div>
 
         {/* Footer */}
-        <div className="shrink-0 flex items-center justify-between text-[1.5cqh] tracking-[0.18em] uppercase opacity-55 gap-3">
+        <div className="shrink-0 flex items-center justify-between text-[2cqh] tracking-[0.18em] uppercase opacity-65 gap-3">
           <span className="truncate max-w-[60%]">{bookTitle || "—"}</span>
           <span className="truncate max-w-[40%] text-right">{bookAuthor || "BookFeed"}</span>
         </div>
@@ -132,37 +132,37 @@ export default SlideRenderer;
 function Hero({ title, body, note }) {
   const titleSize = headlineScale(title.length, false);
   return (
-    <div className="flex flex-col gap-[2.4cqh] overflow-hidden">
-      <h2 className="font-serif leading-[1.04] tracking-tightish" style={{ fontSize: `${titleSize}cqh` }}>
+    <div className="flex flex-col gap-[2.6cqh] overflow-hidden">
+      <h2 className="font-serif leading-[1.05] tracking-tightish" style={{ fontSize: `${titleSize}cqh` }}>
         {title}
       </h2>
-      <div className="h-px w-[10cqh] bg-current opacity-50 shrink-0" />
-      <p className="leading-[1.5] opacity-90" style={{ fontSize: `${bodyScale(body.length)}cqh` }}>
+      <div className="h-px w-[10cqh] bg-current opacity-60 shrink-0" />
+      <p className="leading-[1.55] opacity-95" style={{ fontSize: `${bodyScale(body.length)}cqh` }}>
         {body}
       </p>
       {note ? (
-        <div className="mt-[1cqh] text-[1.6cqh] uppercase tracking-[0.18em] opacity-55">{note}</div>
+        <div className="mt-[1cqh] text-[2cqh] uppercase tracking-[0.18em] opacity-65">{note}</div>
       ) : null}
     </div>
   );
 }
 
 function Split({ title, body, note }) {
-  const titleSize = headlineScale(title.length, false) * 0.85;
+  const titleSize = headlineScale(title.length, false) * 0.86;
   const bodySize = bodyScale(body.length);
   return (
     <div className="flex flex-col gap-[3cqh] overflow-hidden">
-      <h2 className="font-serif leading-[1.04]" style={{ fontSize: `${titleSize}cqh` }}>
+      <h2 className="font-serif leading-[1.06]" style={{ fontSize: `${titleSize}cqh` }}>
         {title}
       </h2>
-      <div className="flex gap-[3.2cqh] overflow-hidden">
-        <div className="w-[2px] bg-current opacity-30 shrink-0" />
-        <div className="flex flex-col gap-[1.6cqh] overflow-hidden">
-          <p className="leading-[1.5] opacity-92" style={{ fontSize: `${bodySize}cqh` }}>
+      <div className="flex gap-[3cqh] overflow-hidden">
+        <div className="w-[3px] bg-current opacity-40 shrink-0" />
+        <div className="flex flex-col gap-[1.8cqh] overflow-hidden">
+          <p className="leading-[1.55] opacity-95" style={{ fontSize: `${bodySize}cqh` }}>
             {body}
           </p>
           {note ? (
-            <div className="text-[1.6cqh] uppercase tracking-[0.18em] opacity-55">{note}</div>
+            <div className="text-[2cqh] uppercase tracking-[0.18em] opacity-65">{note}</div>
           ) : null}
         </div>
       </div>
@@ -171,16 +171,16 @@ function Split({ title, body, note }) {
 }
 
 function Stamp({ title, body, note, role }) {
-  const titleSize = headlineScale(title.length, false) * 0.9;
+  const titleSize = headlineScale(title.length, false) * 0.92;
   return (
     <div className="flex flex-col gap-[2.6cqh] overflow-hidden">
-      <div className="inline-block self-start border border-current/60 px-[1.6cqh] py-[0.6cqh] text-[1.6cqh] uppercase tracking-[0.22em]">
+      <div className="inline-block self-start border border-current/70 px-[1.8cqh] py-[0.8cqh] text-[2cqh] uppercase tracking-[0.22em]">
         {note || (role === "mistake" ? "errore" : role === "false_premise" ? "falso presupposto" : "attenzione")}
       </div>
-      <h2 className="font-serif leading-[1.06]" style={{ fontSize: `${titleSize}cqh` }}>
+      <h2 className="font-serif leading-[1.07]" style={{ fontSize: `${titleSize}cqh` }}>
         {title}
       </h2>
-      <p className="leading-[1.55] opacity-92" style={{ fontSize: `${bodyScale(body.length)}cqh` }}>
+      <p className="leading-[1.55] opacity-95" style={{ fontSize: `${bodyScale(body.length)}cqh` }}>
         {body}
       </p>
     </div>
@@ -188,16 +188,15 @@ function Stamp({ title, body, note, role }) {
 }
 
 function Centered({ title, body, note, big }) {
-  // Title above is a small label; body is the headline.
   const bodySize = headlineScale(body.length, big);
   return (
-    <div className="flex flex-col items-center justify-center text-center gap-[3cqh] overflow-hidden mx-auto max-w-[88%]">
-      <div className="text-[1.8cqh] uppercase tracking-[0.24em] opacity-55">{title}</div>
-      <p className="font-serif leading-[1.06]" style={{ fontSize: `${bodySize}cqh` }}>
+    <div className="flex flex-col items-center justify-center text-center gap-[3cqh] overflow-hidden mx-auto max-w-[90%]">
+      <div className="text-[2.2cqh] uppercase tracking-[0.24em] opacity-65">{title}</div>
+      <p className="font-serif leading-[1.08]" style={{ fontSize: `${bodySize}cqh` }}>
         {body}
       </p>
       {note ? (
-        <div className="text-[1.7cqh] uppercase tracking-[0.2em] opacity-60">{note}</div>
+        <div className="text-[2cqh] uppercase tracking-[0.2em] opacity-70">{note}</div>
       ) : null}
     </div>
   );
@@ -207,26 +206,26 @@ function Labeled({ title, body, note }) {
   const bodySize = bodyScale(body.length) * 1.05;
   return (
     <div className="flex flex-col gap-[2.4cqh] overflow-hidden">
-      <div className="text-[1.7cqh] uppercase tracking-[0.22em] opacity-55">{title}</div>
-      <p className="leading-[1.5] opacity-95" style={{ fontSize: `${bodySize}cqh` }}>
+      <div className="text-[2.2cqh] uppercase tracking-[0.22em] opacity-65">{title}</div>
+      <p className="leading-[1.55] opacity-95" style={{ fontSize: `${bodySize}cqh` }}>
         {body}
       </p>
       {note ? (
-        <div className="text-[1.6cqh] uppercase tracking-[0.18em] opacity-55">↳ {note}</div>
+        <div className="text-[2cqh] uppercase tracking-[0.18em] opacity-65">↳ {note}</div>
       ) : null}
     </div>
   );
 }
 
 function QuoteLike({ title, body, note }) {
-  const bodySize = headlineScale(body.length, false) * 0.78;
+  const bodySize = headlineScale(body.length, false) * 0.82;
   return (
     <div className="flex flex-col gap-[2cqh] overflow-hidden">
-      <div className="font-serif leading-none opacity-50" style={{ fontSize: "9cqh" }}>“</div>
-      <p className="font-serif leading-[1.25] -mt-[2cqh]" style={{ fontSize: `${bodySize}cqh` }}>
+      <div className="font-serif leading-none opacity-55" style={{ fontSize: "9cqh" }}>“</div>
+      <p className="font-serif leading-[1.28] -mt-[2cqh]" style={{ fontSize: `${bodySize}cqh` }}>
         {body}
       </p>
-      <div className="text-[1.7cqh] uppercase tracking-[0.22em] opacity-60">
+      <div className="text-[2cqh] uppercase tracking-[0.22em] opacity-70">
         {title}{note ? " · " + note : ""}
       </div>
     </div>
