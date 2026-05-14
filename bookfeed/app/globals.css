@@ -92,7 +92,9 @@ body {
   background: linear-gradient(90deg, transparent, #2a2a2a 25%, #2a2a2a 75%, transparent);
 }
 
-/* Slide canvas — 4:5 social ratio */
+/* Slide canvas — 4:5 social ratio. Container queries (cqh/cqw) inside resolve
+   relative to this box, so the same component renders pixel-perfect at 1080×1350
+   during export and at any size during viewing. */
 .slide-canvas {
   aspect-ratio: 4 / 5;
   width: 100%;
@@ -101,6 +103,7 @@ body {
   border-radius: 22px;
   overflow: hidden;
   position: relative;
+  container-type: size;
 }
 .slide-canvas.light {
   background: #f5f5f0;

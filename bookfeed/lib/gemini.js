@@ -159,11 +159,18 @@ OUTPUT JSON:
   ]
 }
 
-Regole:
-- "title" di ogni slide max 7 parole, tagliente.
-- "body" max 280 caratteri, frasi brevi, niente "in conclusione".
-- "note" può essere vuota; usala per un numero, una parola chiave, una micro-citazione.
-- Niente emoji. Niente hashtag dentro le slide (solo i tag).
+Regole rigide di forma (rispettarle è obbligatorio, le violazioni rovinano il layout):
+- "title": max 6 parole. Niente punteggiatura finale.
+- "body" per ruolo (rispetta i CARATTERI, non parole):
+  · hook → max 130 caratteri
+  · tension, false_premise, mistake → max 200 caratteri
+  · core → max 100 caratteri, una sola frase memorabile
+  · explanation, example, implication → max 220 caratteri
+  · synthesis → max 90 caratteri, una sola frase scolpita
+  · question → max 150 caratteri, deve finire con "?"
+- "note": opzionale, max 28 caratteri (una parola chiave, un numero, una micro-citazione).
+- Frasi brevi. Niente "in conclusione", "in sintesi", "quindi" come incipit.
+- Niente emoji. Niente hashtag dentro le slide (solo dentro "tags").
 Lingua: ${language === "it" ? "italiano" : "inglese"}.`;
 
   const data = await callWithRotation({ model, system, prompt, jsonMode: true, temperature: 0.8 }, keys);

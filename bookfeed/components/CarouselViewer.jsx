@@ -184,11 +184,11 @@ export default function CarouselViewer({ carousel, book, onClose, onDelete }) {
 }
 
 function ExportFrame({ slide, index, total, bookTitle, bookAuthor, invert }) {
-  // The hidden export wrapper renders the slide at full 1080x1350.
-  // We override slide-canvas aspect-ratio by giving the container exact size.
+  // Force the canvas to render exactly at 1080x1350 by overriding aspect-ratio.
+  // Container queries inside SlideRenderer scale typography automatically.
   return (
-    <div style={{ width: "100%", height: "100%" }}>
-      <SlideOverride
+    <div className="export-fixed">
+      <SlideRenderer
         slide={slide}
         index={index}
         total={total}
@@ -196,26 +196,13 @@ function ExportFrame({ slide, index, total, bookTitle, bookAuthor, invert }) {
         bookAuthor={bookAuthor}
         invert={invert}
       />
-    </div>
-  );
-}
-
-function SlideOverride(props) {
-  // Re-use the same component, but force a fixed size via inline style on the canvas
-  // by wrapping with a className that disables aspect-ratio.
-  return (
-    <div className="export-fixed">
-      <SlideRenderer {...props} />
       <style>{`
         .export-fixed .slide-canvas {
           aspect-ratio: auto !important;
           width: 1080px !important;
           height: 1350px !important;
           border-radius: 36px !important;
-          font-size: 28px;
         }
-        .export-fixed .slide-canvas .text-\\[11px\\] { font-size: 18px !important; }
-        .export-fixed .slide-canvas .text-\\[10px\\] { font-size: 16px !important; }
       `}</style>
     </div>
   );
