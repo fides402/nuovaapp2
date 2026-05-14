@@ -119,11 +119,11 @@ function scoreSentence(s, idf, freq) {
   return score;
 }
 
-export function mineCandidates(fullText, { perSection = 6, maxCandidates = 70 } = {}) {
-  // Sectioning: split into N roughly equal sections so we cover whole book
-  const sections = sliceSections(fullText, 12);
+export function mineCandidates(fullText, { perSection = 6, maxCandidates = 70, sections: nSections = 12, globalIdf = null } = {}) {
+  // Sectioning: split into N roughly equal sections so we cover the input.
+  const sections = sliceSections(fullText, nSections);
   const allSentences = splitSentences(fullText);
-  const idf = computeIdf(allSentences);
+  const idf = globalIdf || computeIdf(allSentences);
   // Global term frequency
   const freq = new Map();
   for (const s of allSentences) {
@@ -187,6 +187,26 @@ function jaccard(a, b) {
   for (const t of A) if (B.has(t)) inter++;
   const uni = A.size + B.size - inter;
   return inter / uni;
+}
+
+// Mine candidates for one chapter — fewer sections, fewer per section,
+// reuses the book-global IDF for stable term weighting.
+export function mineChapter(chapterText, { globalIdf = null, maxCandidates = 28 } = {}) {
+  if (!chapterText || chapterText.length < 400) return [];
+  const nSections = Math.max(3, Math.min(6, Math.round(chapterText.length / 4000)));
+  const perSection = Math.max(3, Math.ceil(maxCandidates / nSections));
+  return mineCandidates(chapterText, {
+    perSection,
+    maxCandidates,
+    sections: nSections,
+    globalIdf,
+  });
+}
+
+// Pre-compute the book-global IDF once so per-chapter mining uses consistent term weights.
+export function buildGlobalIdf(fullText) {
+  const sents = splitSentences(fullText);
+  return computeIdf(sents);
 }
 
 // Build a compact corpus brief: top terms + bigrams. Used as context for the AI.

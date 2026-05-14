@@ -109,6 +109,86 @@ Non includere altro. Niente commenti.`;
   return data.concepts;
 }
 
+export async function generateChapterCarousel({ keys, model, bookMeta, chapter, candidates, language = "it" }) {
+  const system = `Sei insieme un editor di idee e un autore di caroselli social per un feed personale di conoscenza.
+Tagliente, profondo, sintetico. Niente luoghi comuni. Niente riassunti scolastici.
+Identifichi L'INSIGHT più potente del capitolo e lo trasformi in un carosello memorabile.
+Stile: minimal premium, asciutto, denso. Frasi brevi. Niente emoji. Niente clickbait infantile.
+${language === "it" ? "Lavori in italiano impeccabile." : "Work in flawless English."}
+Rispondi SEMPRE in JSON valido aderente allo schema richiesto.`;
+
+  const numbered = (candidates || []).map((c, i) => `[${i + 1}] ${c.text}`).join("\n");
+
+  const prompt = `Libro: "${bookMeta.title || "Senza titolo"}"${bookMeta.author ? " — " + bookMeta.author : ""}
+Capitolo: "${chapter.title}"
+${chapter.synthetic ? "(Sezione del libro: non c'è un titolo originale, è un blocco di testo.)" : ""}
+
+Ho selezionato algoritmicamente i passaggi più salienti di questo capitolo. Studialo come un editor:
+- Trova L'INSIGHT più potente e meno banale del capitolo (UN solo concetto, non un riassunto).
+- Riformulalo con parole tue, in modo che resti in mente.
+- Poi costruisci un carosello da ESATTAMENTE 10 slide su quell'insight.
+
+PASSAGGI SALIENTI DEL CAPITOLO:
+${numbered || "(nessun candidato — usa solo il titolo del capitolo come spunto)"}
+
+STRUTTURA DELLE 10 SLIDE (rispetta i ruoli in ordine):
+1. hook — promessa o frase magnetica
+2. tension — perché senza questo insight si sbaglia
+3. false_premise — l'errore di pensiero da smontare
+4. core — l'insight in 1 frase scolpita
+5. explanation — perché funziona, linguaggio piano
+6. example — uno scenario concreto o quotidiano
+7. implication — cosa cambia in chi lo capisce davvero
+8. mistake — la trappola classica da evitare
+9. synthesis — la frase memorabile da tatuarsi
+10. question — domanda finale che apre, non chiude
+
+OUTPUT JSON ESATTO:
+{
+  "insight": {
+    "title": "titolo dell'insight, max 7 parole",
+    "thesis": "1 frase: cosa afferma esattamente"
+  },
+  "title": "titolo del carosello (può coincidere con l'insight)",
+  "concept": "1 frase: il cuore",
+  "tags": ["3-5 tag, minuscoli"],
+  "depth": 1-5,
+  "quality": 1-5,
+  "caption": "didascalia 2-4 frasi, evocativa ma non vaga",
+  "slides": [
+    {"role": "hook", "title": "...", "body": "...", "note": ""},
+    {"role": "tension", "title": "...", "body": "...", "note": ""},
+    {"role": "false_premise", "title": "...", "body": "...", "note": ""},
+    {"role": "core", "title": "...", "body": "...", "note": ""},
+    {"role": "explanation", "title": "...", "body": "...", "note": ""},
+    {"role": "example", "title": "...", "body": "...", "note": ""},
+    {"role": "implication", "title": "...", "body": "...", "note": ""},
+    {"role": "mistake", "title": "...", "body": "...", "note": ""},
+    {"role": "synthesis", "title": "...", "body": "...", "note": ""},
+    {"role": "question", "title": "...", "body": "...", "note": ""}
+  ]
+}
+
+Regole rigide di forma (obbligatorie, le violazioni rovinano il layout):
+- "title" di ogni slide: max 6 parole, niente punteggiatura finale.
+- "body" — limite di CARATTERI per ruolo:
+  · hook → max 130
+  · tension, false_premise, mistake → max 200
+  · core → max 100, una sola frase memorabile
+  · explanation, example, implication → max 220
+  · synthesis → max 90, una sola frase scolpita
+  · question → max 150, deve finire con "?"
+- "note": opzionale, max 28 caratteri (parola chiave, numero, micro-citazione).
+- Niente emoji. Niente hashtag dentro le slide.
+- Frasi brevi. Niente "in conclusione", "in sintesi", "quindi" come incipit.`;
+
+  const data = await callWithRotation({ model, system, prompt, jsonMode: true, temperature: 0.75 }, keys);
+  if (!Array.isArray(data?.slides) || data.slides.length !== 10) {
+    throw new Error("Capitolo: serve esattamente 10 slide.");
+  }
+  return data;
+}
+
 export async function generateCarousel({ keys, model, bookMeta, concept, language = "it" }) {
   const system = `Sei un autore di caroselli social per un feed personale di conoscenza.
 Stile: minimal premium, asciutto, denso, mai didascalico. Niente emoji. Niente clickbait infantile.

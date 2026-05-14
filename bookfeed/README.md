@@ -11,19 +11,21 @@ Non è un riassuntore: è un **Book Concept Miner + Social Carousel Generator** 
 ## Pipeline
 
 1. Upload PDF/EPUB (client-side, niente upload server)
-2. Estrazione testo (pdf.js / unzip + DOMParser per EPUB)
-3. Chunking + ranking locale dei passaggi (TF/IDF, pattern definitori, marker argomentativi, ricorrenza)
-4. **Solo al click su "Genera"**: i candidati top vengono inviati a Gemini
-5. Gemini sceglie i concetti globali → poi genera un carosello da 10 slide per ognuno
-6. Le slide vengono **assemblate in codice** con template minimal (no AI per la grafica)
-7. Tutto salvato in IndexedDB del browser
+2. Estrazione testo (pdf.js per PDF, unzip + DOMParser per EPUB)
+3. **Detection dei capitoli**: outline PDF, spine EPUB, regex su intestazioni, sezioni equilibrate come fallback
+4. Per ogni capitolo: ranking locale dei passaggi (TF/IDF globale + pattern definitori, marker argomentativi, ricorrenza)
+5. **Solo al click su "Genera"**: per ogni capitolo selezionato vengono inviati i suoi candidati a Gemini
+6. Gemini identifica l'insight più potente del capitolo e produce direttamente un carosello da 10 slide
+7. Le slide vengono **assemblate in codice** con template minimal (no AI per la grafica)
+8. Tutto salvato in IndexedDB del browser
 
 ## Risparmio crediti
 
 - Il libro intero **non viene mai** inviato all'AI
-- L'AI riceve solo ~70 candidati pre-selezionati + un breve riassunto di termini frequenti
-- 1 chiamata per scegliere i concetti + 1 chiamata per ogni carosello
+- Per ogni capitolo l'AI riceve solo ~25 candidati pre-selezionati + il titolo del capitolo
+- **1 sola chiamata per capitolo**: ritorna direttamente insight + 10 slide
 - Modalità **economica** (`gemini-2.5-flash`) o **profonda** (`gemini-2.5-pro`)
+- Selezione fine: puoi scegliere quali capitoli generare e saltare quelli già fatti
 - Risultati cachati per non rigenerare nulla a vuoto
 
 ## Setup locale

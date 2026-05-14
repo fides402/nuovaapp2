@@ -25,16 +25,25 @@ export default function Feed({ books, carousels, onOpenCarousel, onOpenBook, onD
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {list.map((c) => (
+                {[...list].sort(byChapterOrTime).map((c) => (
                   <button
                     key={c.id}
                     onClick={() => onOpenCarousel(c, b)}
                     className="card p-4 text-left hover:border-ink transition-colors group"
                   >
                     <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.22em] text-muted">
-                      <span>Carosello · {c.slides?.length || 10} slide</span>
+                      <span className="truncate">
+                        {typeof c.chapter?.index === "number"
+                          ? `Cap. ${String(c.chapter.index + 1).padStart(2, "0")}`
+                          : "Carosello"} · {c.slides?.length || 10} slide
+                      </span>
                       <span>{relativeTime(c.createdAt)}</span>
                     </div>
+                    {c.chapter?.title && (
+                      <div className="text-xs text-muted mt-1 truncate" title={c.chapter.title}>
+                        {c.chapter.title}
+                      </div>
+                    )}
                     <h4 className="font-serif text-lg leading-snug mt-2 group-hover:underline underline-offset-4 decoration-1">
                       {c.title}
                     </h4>
@@ -55,6 +64,14 @@ export default function Feed({ books, carousels, onOpenCarousel, onOpenBook, onD
       })}
     </div>
   );
+}
+
+function byChapterOrTime(a, b) {
+  const ai = a?.chapter?.index, bi = b?.chapter?.index;
+  if (typeof ai === "number" && typeof bi === "number") return ai - bi;
+  if (typeof ai === "number") return -1;
+  if (typeof bi === "number") return 1;
+  return (b.createdAt || 0) - (a.createdAt || 0);
 }
 
 function formatChars(n) {

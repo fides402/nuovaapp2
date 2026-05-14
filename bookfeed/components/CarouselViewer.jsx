@@ -97,7 +97,12 @@ export default function CarouselViewer({ carousel, book, onClose, onDelete }) {
           <div className="text-[11px] uppercase tracking-[0.22em] text-muted">
             {book?.title || "Libro"}{book?.author ? " · " + book.author : ""}
           </div>
-          <h2 className="font-serif text-2xl sm:text-3xl leading-tight mt-1">{carousel.title}</h2>
+          {carousel.chapter?.title && (
+            <div className="text-[11px] uppercase tracking-[0.22em] text-muted mt-1">
+              Cap. {String((carousel.chapter.index ?? 0) + 1).padStart(2, "0")} · <span className="text-ink/80 normal-case tracking-normal">{carousel.chapter.title}</span>
+            </div>
+          )}
+          <h2 className="font-serif text-2xl sm:text-3xl leading-tight mt-2">{carousel.title}</h2>
           {carousel.concept && <div className="text-muted mt-1 max-w-[60ch]">{carousel.concept}</div>}
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-3">
