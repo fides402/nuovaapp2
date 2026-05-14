@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getCandidates, saveCandidates, saveCarousel, listCarousels } from "../lib/storage";
+import { getCandidates, saveCandidates, saveCarousel, listCarousels, saveBook } from "../lib/storage";
 import { buildCorpusBrief, buildGlobalIdf, mineChapter } from "../lib/miner";
 import { MODELS, generateChapterCarousel } from "../lib/gemini";
+import { deriveChaptersFromText } from "../lib/extract";
 
 // Chapter-based workflow: one carousel per selected chapter.
 // 1) Detect chapters during extraction.
@@ -11,7 +12,8 @@ import { MODELS, generateChapterCarousel } from "../lib/gemini";
 // 3) On click, for each selected chapter, send only its candidates to Gemini.
 // 4) Gemini extracts THE insight of that chapter and returns a full 10-slide carousel.
 
-export default function BookPanel({ book, settings, onClose, onCarouselReady }) {
+export default function BookPanel({ book: initialBook, settings, onClose, onCarouselReady }) {
+  const [book, setBook] = useState(initialBook);
   const [phase, setPhase] = useState("idle"); // idle | scanning | ready | generating | done | error
   const [error, setError] = useState("");
   const [chapterCands, setChapterCands] = useState({}); // {chapterIdx: [{text, score}]}
@@ -42,33 +44,45 @@ export default function BookPanel({ book, settings, onClose, onCarouselReady }) 
         if (cancelled) return;
         setExisting(list);
 
-        const cached = await getCandidates(book.id);
-        if (cached?.chapterCands && cached?.brief) {
+        // Backfill chapters if missing (book was imported before chapter detection)
+        let bk = book;
+        if (!bk.chapters || bk.chapters.length === 0) {
+          const derived = deriveChaptersFromText(bk.text || "");
+          if (derived.length > 0) {
+            bk = { ...bk, chapters: derived };
+            await saveBook(bk);
+            if (cancelled) return;
+            setBook(bk);
+          }
+        }
+        const chs = bk.chapters || [];
+
+        const cached = await getCandidates(bk.id);
+        if (cached?.chapterCands && cached?.brief && Object.keys(cached.chapterCands).length === chs.length) {
           if (cancelled) return;
           setChapterCands(cached.chapterCands);
           setBrief(cached.brief);
-          // Default selection: all chapters that don't already have a carousel
           const done = new Set(list.map((c) => c?.chapter?.index).filter((i) => typeof i === "number"));
-          setSelected(new Set(chapters.filter((c) => !done.has(c.index)).map((c) => c.index)));
+          setSelected(new Set(chs.filter((c) => !done.has(c.index)).map((c) => c.index)));
           setPhase("ready");
           return;
         }
 
         // Compute global IDF once for stable per-chapter weighting
-        const globalIdf = buildGlobalIdf(book.text);
-        const br = buildCorpusBrief(book.text);
+        const globalIdf = buildGlobalIdf(bk.text);
+        const br = buildCorpusBrief(bk.text);
         const map = {};
-        for (const ch of chapters) {
+        for (const ch of chs) {
           if (cancelled) return;
-          const chText = book.text.slice(ch.charStart, ch.charEnd);
+          const chText = bk.text.slice(ch.charStart, ch.charEnd);
           map[ch.index] = mineChapter(chText, { globalIdf, maxCandidates: 28 });
         }
-        await saveCandidates(book.id, { chapterCands: map, brief: br, when: Date.now() });
+        await saveCandidates(bk.id, { chapterCands: map, brief: br, when: Date.now() });
         if (cancelled) return;
         setChapterCands(map);
         setBrief(br);
         const done = new Set(list.map((c) => c?.chapter?.index).filter((i) => typeof i === "number"));
-        setSelected(new Set(chapters.filter((c) => !done.has(c.index)).map((c) => c.index)));
+        setSelected(new Set(chs.filter((c) => !done.has(c.index)).map((c) => c.index)));
         setPhase("ready");
       } catch (e) {
         if (!cancelled) { setError(e.message); setPhase("error"); }

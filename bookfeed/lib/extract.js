@@ -259,6 +259,16 @@ async function chaptersFromOutline(pdf, flat, pageOffsets, totalChars) {
   return chapters;
 }
 
+// Public helper: derive chapters from a plain text (used as fallback when
+// a book was extracted by an older version of the app that did not save
+// the chapters array).
+export function deriveChaptersFromText(text) {
+  if (!text) return [];
+  const detected = detectChaptersFromText(text);
+  if (detected.length >= 2) return detected;
+  return syntheticChapters(text);
+}
+
 const CHAPTER_RE_PATTERNS = [
   /^[ \t]*(?:CAPITOLO|Capitolo|CAP\.?)\s+(?:[IVXLCDM]+|\d+)(?:[\s.:\-—][^\n]{0,140})?$/gm,
   /^[ \t]*(?:CHAPTER|Chapter)\s+(?:[IVXLCDM]+|\d+)(?:[\s.:\-—][^\n]{0,140})?$/gm,
