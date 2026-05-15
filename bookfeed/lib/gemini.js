@@ -101,12 +101,14 @@ async function callWithRotation(options, keys) {
 // quality order; each has independent daily limits so chaining them multiplies
 // total free capacity without any cost.
 const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+// "openrouter/free" è il router automatico di OpenRouter: sceglie sempre
+// il miglior modello gratuito disponibile al momento — non richiede aggiornamenti.
+// I modelli a pagamento dopo sono economicissimi (~$0.05-0.10 per libro intero).
 const OPENROUTER_FREE_MODELS = [
-  "meta-llama/llama-3.3-70b-instruct:free",          // Llama 3.3 70b — qualità top
-  "google/gemma-3-27b-it:free",                       // Gemma 3 27b — Google
-  "deepseek/deepseek-chat-v3-0324:free",              // DeepSeek V3
-  "mistralai/mistral-small-3.1-24b-instruct:free",   // Mistral Small
-  "qwen/qwen3-8b:free",                               // Qwen 3 8b
+  "openrouter/free",                           // router automatico free (sempre aggiornato)
+  "meta-llama/llama-3.3-70b-instruct:free",   // fallback esplicito Llama
+  "google/gemma-3-27b-it:free",               // fallback esplicito Gemma
+  "meta-llama/llama-3.1-8b-instruct",         // pagamento micro (~$0.01/libro) se free esauriti
 ];
 
 async function callOpenRouter({ apiKey, system, prompt, temperature = 0.8, modelIndex = 0 }) {
