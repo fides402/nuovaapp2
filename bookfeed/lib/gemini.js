@@ -96,6 +96,87 @@ async function callWithRotation(options, keys) {
   throw lastErr || new Error("Tutte le API key hanno fallito dopo più tentativi.");
 }
 
+// ── OpenRouter fallback ───────────────────────────────────────────────────────
+// OpenAI-compatible API that aggregates many models. We try free models in
+// quality order; each has independent daily limits so chaining them multiplies
+// total free capacity without any cost.
+const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+const OPENROUTER_FREE_MODELS = [
+  "meta-llama/llama-3.3-70b-instruct:free",   // best quality, same as Groq
+  "qwen/qwen-2.5-72b-instruct:free",           // strong alternative
+  "mistralai/mistral-small-3.1-24b-instruct:free",
+  "google/gemma-3-27b-it:free",
+];
+
+async function callOpenRouter({ apiKey, system, prompt, temperature = 0.8, modelIndex = 0 }) {
+  if (!apiKey) throw new Error("OpenRouter API key mancante.");
+  const model = OPENROUTER_FREE_MODELS[modelIndex % OPENROUTER_FREE_MODELS.length];
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 90000);
+  let res;
+  try {
+    res = await fetch(OPENROUTER_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://bookfeed-4suu.vercel.app",
+        "X-Title": "BookFeed",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          ...(system ? [{ role: "system", content: system }] : []),
+          { role: "user", content: prompt },
+        ],
+        temperature,
+        max_tokens: 8192,
+        response_format: { type: "json_object" },
+      }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`OpenRouter[${model}] ${res.status}: ${t.slice(0, 280)}`);
+  }
+  const data = await res.json();
+  const text = data?.choices?.[0]?.message?.content || "";
+  if (!text) throw new Error(`Risposta OpenRouter[${model}] vuota.`);
+  try { return JSON.parse(text); } catch {
+    const m = text.match(/\{[\s\S]*\}$/);
+    if (m) { try { return JSON.parse(m[0]); } catch {} }
+    throw new Error(`JSON OpenRouter non valido: ${text.slice(0, 200)}`);
+  }
+}
+
+async function callOpenRouterWithRotation(options, keys) {
+  const list = keys.filter(Boolean);
+  if (!list.length) throw new Error("Nessuna OpenRouter API key configurata.");
+  // Try each free model in order across all keys
+  const totalAttempts = Math.min(OPENROUTER_FREE_MODELS.length * list.length, 6);
+  let lastErr;
+  for (let attempt = 0; attempt < totalAttempts; attempt++) {
+    const key = list[attempt % list.length];
+    const modelIndex = Math.floor(attempt / list.length);
+    try {
+      return await callOpenRouter({ ...options, apiKey: key, modelIndex });
+    } catch (e) {
+      lastErr = e;
+      const m = String(e.message || "");
+      const isAbort = e.name === "AbortError";
+      const transient = isAbort || /429|RATE|quota|exhaust|503|500|fetch|network|connect|failed/i.test(m);
+      if (!transient) throw e;
+      if (attempt < totalAttempts - 1) {
+        await sleep(Math.min(16000, 2000 * Math.pow(2, attempt % 3)));
+      }
+    }
+  }
+  throw lastErr || new Error("OpenRouter: tutti i modelli free esauriti.");
+}
+
 // ── Groq fallback ─────────────────────────────────────────────────────────────
 // Uses OpenAI-compatible chat completions API with llama-3.3-70b-versatile.
 // Same prompt as Gemini — Llama 3.3 70B follows complex JSON instructions well.
@@ -246,7 +327,7 @@ async function callChatGPT({ system, prompt }) {
   }
 }
 
-export async function generateChapterCarousel({ keys, groqKeys, model, bookMeta, chapter, candidates, language = "it" }) {
+export async function generateChapterCarousel({ keys, groqKeys, openRouterKeys, model, bookMeta, chapter, candidates, language = "it" }) {
   const lang = language === "it" ? "italiano" : "English";
 
   const system = `Sei il ghostwriter di un creator Instagram da 500k follower nel settore della conoscenza trasformativa.
@@ -333,24 +414,43 @@ LIMITI DI CARATTERI (obbligatori — violazioni rompono il layout):
   let raw;
   const geminiKeys = (keys || []).filter(Boolean);
   const hasGroq = (groqKeys || []).some(Boolean);
+  const hasOpenRouter = (openRouterKeys || []).some(Boolean);
 
   if (model === "chatgpt") {
-    // ChatGPT via Render server (no API key needed client-side)
     raw = await callChatGPT({ system, prompt });
   } else if (geminiKeys.length > 0) {
-    // Try Gemini first; fall back to Groq if Gemini exhausts all retries
     try {
       raw = await callWithRotation({ model, system, prompt, jsonMode: true, temperature: 0.8 }, geminiKeys);
     } catch (geminiErr) {
-      if (!hasGroq) throw geminiErr;
-      console.info("Gemini failed — switching to Groq fallback:", geminiErr.message);
-      raw = await callGroqWithRotation({ system, prompt, temperature: 0.8 }, groqKeys);
+      // Cascade: Gemini → Groq → OpenRouter
+      if (hasGroq) {
+        try {
+          console.info("Gemini failed — trying Groq:", geminiErr.message);
+          raw = await callGroqWithRotation({ system, prompt, temperature: 0.8 }, groqKeys);
+        } catch (groqErr) {
+          if (!hasOpenRouter) throw groqErr;
+          console.info("Groq failed — trying OpenRouter:", groqErr.message);
+          raw = await callOpenRouterWithRotation({ system, prompt, temperature: 0.8 }, openRouterKeys);
+        }
+      } else if (hasOpenRouter) {
+        console.info("Gemini failed — trying OpenRouter:", geminiErr.message);
+        raw = await callOpenRouterWithRotation({ system, prompt, temperature: 0.8 }, openRouterKeys);
+      } else {
+        throw geminiErr;
+      }
     }
   } else if (hasGroq) {
-    // Only Groq keys configured
-    raw = await callGroqWithRotation({ system, prompt, temperature: 0.8 }, groqKeys);
+    try {
+      raw = await callGroqWithRotation({ system, prompt, temperature: 0.8 }, groqKeys);
+    } catch (groqErr) {
+      if (!hasOpenRouter) throw groqErr;
+      console.info("Groq failed — trying OpenRouter:", groqErr.message);
+      raw = await callOpenRouterWithRotation({ system, prompt, temperature: 0.8 }, openRouterKeys);
+    }
+  } else if (hasOpenRouter) {
+    raw = await callOpenRouterWithRotation({ system, prompt, temperature: 0.8 }, openRouterKeys);
   } else {
-    throw new Error("Aggiungi almeno una API key (Gemini o Groq) nelle Impostazioni, oppure configura ChatGPT in /admin.");
+    throw new Error("Aggiungi almeno una API key nelle Impostazioni (Gemini, Groq o OpenRouter).");
   }
 
   // Accept 6–13 slides: strict !== 10 caused silent failures when Gemini/Groq returned 9 or 11

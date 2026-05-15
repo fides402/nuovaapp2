@@ -110,9 +110,9 @@ export default function BookPanel({ book: initialBook, settings, onClose, onMini
 
   async function handleGenerate() {
     setError("");
-    const hasAnyKey = (settings.apiKeys || []).some(Boolean) || (settings.groqApiKeys || []).some(Boolean);
+    const hasAnyKey = (settings.apiKeys || []).some(Boolean) || (settings.groqApiKeys || []).some(Boolean) || (settings.openRouterKeys || []).some(Boolean);
     if (!hasAnyKey) {
-      setError("Aggiungi almeno una API key (Gemini o Groq) nelle Impostazioni.");
+      setError("Aggiungi almeno una API key (Gemini, Groq o OpenRouter) nelle Impostazioni.");
       return;
     }
     const queue = chapters.filter((c) => selected.has(c.index));
@@ -143,6 +143,7 @@ export default function BookPanel({ book: initialBook, settings, onClose, onMini
           const car = await generateChapterCarousel({
             keys: settings.apiKeys,
             groqKeys: settings.groqApiKeys,
+            openRouterKeys: settings.openRouterKeys,
             model,
             bookMeta: { title: book.title, author: book.author },
             chapter: ch,

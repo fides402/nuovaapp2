@@ -13,6 +13,12 @@ export default function Settings({ open, onClose, onSaved }) {
     next[i] = val.trim();
     update({ groqApiKeys: next });
   }
+  function setOpenRouterKey(i, val) {
+    const next = [...(s.openRouterKeys || [""])];
+    while (next.length <= i) next.push("");
+    next[i] = val.trim();
+    update({ openRouterKeys: next });
+  }
 
   useEffect(() => {
     if (open) setS(SettingsStore.load());
@@ -89,6 +95,26 @@ export default function Settings({ open, onClose, onSaved }) {
           <p className="text-xs text-muted leading-relaxed mt-2">
             Se Gemini fallisce o va in timeout, la generazione continua automaticamente su Groq.
             Ottieni una chiave gratuita su <a className="underline" href="https://console.groq.com/keys" target="_blank" rel="noreferrer">console.groq.com</a>.
+          </p>
+        </div>
+
+        <div className="hr" />
+
+        <div>
+          <div className="flex items-baseline justify-between mb-3">
+            <label className="label mb-0">OpenRouter API key · secondo fallback</label>
+            <span className="text-[10px] uppercase tracking-[0.18em] text-muted">4 modelli free in cascata</span>
+          </div>
+          <input
+            className="input font-mono text-[13px]"
+            type={reveal ? "text" : "password"}
+            value={s.openRouterKeys?.[0] || ""}
+            onChange={(e) => setOpenRouterKey(0, e.target.value)}
+            placeholder="sk-or-…"
+          />
+          <p className="text-xs text-muted leading-relaxed mt-2">
+            Se anche Groq è esaurito, si usa OpenRouter con modelli gratuiti in cascata (Llama 3.3 70b, Qwen 2.5 72b, Mistral, Gemma 3 27b).
+            Registrati gratis su <a className="underline" href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">openrouter.ai/keys</a> — nessun pagamento richiesto.
           </p>
         </div>
 
