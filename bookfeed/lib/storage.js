@@ -93,7 +93,8 @@ export const SettingsStore = {
 };
 
 export const DEFAULT_SETTINGS = {
-  apiKeys: ["", ""],
+  apiKeys: ["", ""],      // Gemini keys
+  groqApiKeys: [""],      // Groq keys (fallback)
   mode: "economy", // 'economy' | 'deep'
   conceptCount: 6,
   language: "it",

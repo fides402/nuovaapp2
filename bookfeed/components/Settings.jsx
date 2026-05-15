@@ -7,6 +7,13 @@ export default function Settings({ open, onClose, onSaved }) {
   const [s, setS] = useState(DEFAULT_SETTINGS);
   const [reveal, setReveal] = useState(false);
 
+  function setGroqKey(i, val) {
+    const next = [...(s.groqApiKeys || [""])];
+    while (next.length <= i) next.push("");
+    next[i] = val.trim();
+    update({ groqApiKeys: next });
+  }
+
   useEffect(() => {
     if (open) setS(SettingsStore.load());
   }, [open]);
@@ -60,8 +67,28 @@ export default function Settings({ open, onClose, onSaved }) {
             Mostra le chiavi
           </label>
           <p className="text-xs text-muted leading-relaxed">
-            Le chiavi sono salvate solo nel tuo browser (localStorage). Non lasciano mai questo dispositivo.
-            Crea le tue su <a className="underline" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">aistudio.google.com</a>.
+            Chiavi Gemini — crea le tue su <a className="underline" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">aistudio.google.com</a>.
+            Salvate solo nel browser, non lasciano mai il dispositivo.
+          </p>
+        </div>
+
+        <div className="hr" />
+
+        <div>
+          <div className="flex items-baseline justify-between mb-3">
+            <label className="label mb-0">Groq API key · fallback automatico</label>
+            <span className="text-[10px] uppercase tracking-[0.18em] text-muted">llama-3.3-70b</span>
+          </div>
+          <input
+            className="input font-mono text-[13px]"
+            type={reveal ? "text" : "password"}
+            value={s.groqApiKeys?.[0] || ""}
+            onChange={(e) => setGroqKey(0, e.target.value)}
+            placeholder="gsk_…"
+          />
+          <p className="text-xs text-muted leading-relaxed mt-2">
+            Se Gemini fallisce o va in timeout, la generazione continua automaticamente su Groq.
+            Ottieni una chiave gratuita su <a className="underline" href="https://console.groq.com/keys" target="_blank" rel="noreferrer">console.groq.com</a>.
           </p>
         </div>
 

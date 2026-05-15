@@ -2,8 +2,12 @@
 
 // Gemini API wrapper using REST directly (no SDK = smaller bundle, no quirks).
 // All calls are client-side; key is read from localStorage in the UI layer.
+// Groq (llama-3.3-70b-versatile) is used as automatic fallback when Gemini fails.
 
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
+const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
+// Best Groq model for structured creative output — matches Gemini Flash quality
+const GROQ_MODEL = "llama-3.3-70b-versatile";
 
 export const MODELS = {
   economy: "gemini-2.5-flash",
@@ -90,6 +94,74 @@ async function callWithRotation(options, keys) {
   throw lastErr || new Error("Tutte le API key hanno fallito dopo più tentativi.");
 }
 
+// ── Groq fallback ─────────────────────────────────────────────────────────────
+// Uses OpenAI-compatible chat completions API with llama-3.3-70b-versatile.
+// Same prompt as Gemini — Llama 3.3 70B follows complex JSON instructions well.
+async function callGroq({ apiKey, system, prompt, temperature = 0.8 }) {
+  if (!apiKey) throw new Error("Groq API key mancante.");
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 90000);
+  let res;
+  try {
+    res = await fetch(GROQ_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [
+          ...(system ? [{ role: "system", content: system }] : []),
+          { role: "user", content: prompt },
+        ],
+        temperature,
+        max_tokens: 8192,
+        response_format: { type: "json_object" },
+      }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Groq ${res.status}: ${t.slice(0, 280)}`);
+  }
+  const data = await res.json();
+  const text = data?.choices?.[0]?.message?.content || "";
+  if (!text) throw new Error("Risposta Groq vuota.");
+  try { return JSON.parse(text); } catch {
+    const m = text.match(/\{[\s\S]*\}$/);
+    if (m) { try { return JSON.parse(m[0]); } catch {} }
+    throw new Error("JSON Groq non valido: " + text.slice(0, 200));
+  }
+}
+
+async function callGroqWithRotation(options, keys) {
+  const list = keys.filter(Boolean);
+  if (!list.length) throw new Error("Nessuna Groq API key configurata.");
+  const MAX_ATTEMPTS = 4;
+  let lastErr;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const key = list[attempt % list.length];
+    try {
+      return await callGroq({ ...options, apiKey: key });
+    } catch (e) {
+      lastErr = e;
+      const m = String(e.message || "");
+      const isAbort = e.name === "AbortError";
+      const transient = isAbort || /429|RATE|quota|exhaust|503|500|fetch|network|connect|failed/i.test(m);
+      if (!transient) throw e;
+      if (attempt < MAX_ATTEMPTS - 1) {
+        const delay = Math.min(32000, 3000 * Math.pow(2, attempt)); // 3 s, 6 s, 12 s
+        await sleep(delay);
+      }
+    }
+  }
+  throw lastErr || new Error("Groq: tutti i tentativi esauriti.");
+}
+
 export async function selectConcepts({ keys, model, bookMeta, brief, candidates, targetCount = 6, language = "it" }) {
   const system = `Sei un editor di idee: tagliente, profondo, sintetico. Lavori in ${language === "it" ? "italiano" : "inglese"}.
 Non riassumi: identifichi i concetti più potenti e poco banali di un libro.
@@ -130,7 +202,7 @@ Non includere altro. Niente commenti.`;
   return data.concepts;
 }
 
-export async function generateChapterCarousel({ keys, model, bookMeta, chapter, candidates, language = "it" }) {
+export async function generateChapterCarousel({ keys, groqKeys, model, bookMeta, chapter, candidates, language = "it" }) {
   const lang = language === "it" ? "italiano" : "English";
 
   const system = `Sei il ghostwriter di un creator Instagram da 500k follower nel settore della conoscenza trasformativa.
@@ -213,15 +285,33 @@ LIMITI DI CARATTERI (obbligatori — violazioni rompono il layout):
 - "note": max 28 caratteri (parola chiave, numero, micro-citazione).
 - Niente emoji, niente hashtag nelle slide.`;
 
-  const data = await callWithRotation({ model, system, prompt, jsonMode: true, temperature: 0.8 }, keys);
-  // Accept 6–13 slides: strict !== 10 caused silent failures when Gemini returned 9 or 11
-  const slides = Array.isArray(data?.slides) ? data.slides :
-                 Array.isArray(data) ? data : null;
-  if (!slides || slides.length < 6) {
-    throw new Error(`Capitolo: JSON non valido (${slides?.length ?? 0} slide ricevute, min 6).`);
+  // Try Gemini first; fall back to Groq if Gemini exhausts all retries
+  let raw;
+  const geminiKeys = (keys || []).filter(Boolean);
+  const hasGroq = (groqKeys || []).some(Boolean);
+  if (geminiKeys.length > 0) {
+    try {
+      raw = await callWithRotation({ model, system, prompt, jsonMode: true, temperature: 0.8 }, geminiKeys);
+    } catch (geminiErr) {
+      if (!hasGroq) throw geminiErr;
+      console.info("Gemini failed — switching to Groq fallback:", geminiErr.message);
+      raw = await callGroqWithRotation({ system, prompt, temperature: 0.8 }, groqKeys);
+    }
+  } else if (hasGroq) {
+    // Only Groq keys configured
+    raw = await callGroqWithRotation({ system, prompt, temperature: 0.8 }, groqKeys);
+  } else {
+    throw new Error("Aggiungi almeno una API key (Gemini o Groq) nelle Impostazioni.");
   }
-  if (!data?.slides) data.slides = slides; // normalise if Gemini returned bare array
-  return data;
+
+  // Accept 6–13 slides: strict !== 10 caused silent failures when Gemini/Groq returned 9 or 11
+  const slides = Array.isArray(raw?.slides) ? raw.slides :
+                 Array.isArray(raw) ? raw : null;
+  if (!slides || slides.length < 6) {
+    throw new Error(`JSON non valido (${slides?.length ?? 0} slide ricevute, min 6).`);
+  }
+  if (!raw?.slides) raw.slides = slides;
+  return raw;
 }
 
 export async function generateCarousel({ keys, model, bookMeta, concept, language = "it" }) {
