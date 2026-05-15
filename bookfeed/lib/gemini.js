@@ -78,7 +78,8 @@ async function callWithRotation(options, keys) {
       lastErr = e;
       const m = String(e.message || "");
       const isAbort = e.name === "AbortError";
-      const transient = isAbort || /429|RATE|quota|exhaust|503|500/i.test(m);
+      // Retry on rate limits, server errors, network failures, and background-tab fetch aborts
+      const transient = isAbort || /429|RATE|quota|exhaust|503|500|fetch|network|connect|failed/i.test(m);
       if (!transient) throw e; // auth errors, invalid key, etc. — fail immediately
       if (attempt < MAX_ATTEMPTS - 1) {
         const delay = Math.min(32000, 2000 * Math.pow(2, attempt)); // 2 s, 4 s, 8 s, 16 s

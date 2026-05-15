@@ -117,6 +117,9 @@ export default function BookPanel({ book: initialBook, settings, onClose, onCaro
       setError("Seleziona almeno un capitolo.");
       return;
     }
+    // Keep screen awake on mobile so background-tab throttling doesn't kill fetches
+    let wakeLock = null;
+    try { if (navigator?.wakeLock) wakeLock = await navigator.wakeLock.request("screen"); } catch {}
     try {
       setPhase("generating");
       const model = MODELS[settings.mode] || MODELS.economy;
@@ -165,6 +168,8 @@ export default function BookPanel({ book: initialBook, settings, onClose, onCaro
     } catch (e) {
       setError(e.message);
       setPhase("error");
+    } finally {
+      try { wakeLock?.release(); } catch {}
     }
   }
 

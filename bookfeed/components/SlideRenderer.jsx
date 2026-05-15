@@ -55,12 +55,12 @@ function bodyFs(len) {
 }
 function headlineFs(len, big) {
   const k = big ? 1.12 : 1.0;
-  if (len <= 28) return fs(Math.round(22 * k), 11.0 * k, Math.round(140 * k));
-  if (len <= 50) return fs(Math.round(20 * k), 9.0 * k, Math.round(120 * k));
-  if (len <= 80) return fs(Math.round(18 * k), 7.0 * k, Math.round(96 * k));
-  if (len <= 120) return fs(Math.round(16 * k), 5.8 * k, Math.round(82 * k));
-  if (len <= 180) return fs(Math.round(14 * k), 5.0 * k, Math.round(70 * k));
-  return fs(Math.round(13 * k), 4.4 * k, Math.round(64 * k));
+  if (len <= 28) return fs(Math.round(20 * k), 9.5 * k, Math.round(130 * k));
+  if (len <= 50) return fs(Math.round(18 * k), 8.0 * k, Math.round(110 * k));
+  if (len <= 80) return fs(Math.round(16 * k), 6.5 * k, Math.round(90 * k));
+  if (len <= 120) return fs(Math.round(15 * k), 5.5 * k, Math.round(78 * k));
+  if (len <= 180) return fs(Math.round(13 * k), 4.8 * k, Math.round(66 * k));
+  return fs(Math.round(12 * k), 4.2 * k, Math.round(60 * k));
 }
 // Small uppercase labels (kicker, footer, note).
 const LABEL_FS = fs(10, 2.8, 28);
@@ -84,7 +84,7 @@ const SlideRenderer = forwardRef(function SlideRenderer(
       ref={ref}
       className={`slide-canvas ${invert ? "light" : ""}`}
     >
-      <div className="absolute inset-0 flex flex-col p-[5cqh] pb-[4.5cqh]" style={{ paddingInline: "max(18px, 5cqh)" }}>
+      <div className="absolute inset-0 flex flex-col p-[4cqh]" style={{ paddingInline: "max(14px, 4cqh)" }}>
         {/* Header — just slide counter, no role label */}
         <div
           className="shrink-0 flex items-center justify-end tracking-[0.2em] uppercase opacity-70"
@@ -94,7 +94,7 @@ const SlideRenderer = forwardRef(function SlideRenderer(
         </div>
 
         {/* Main */}
-        <div className="flex-1 min-h-0 overflow-hidden flex flex-col justify-center mt-[3cqh] mb-[2.5cqh]">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col justify-center mt-[1.5cqh] mb-[1cqh]">
           {layout === "hero" && <Hero title={title} body={body} note={note} />}
           {layout === "split" && <Split title={title} body={body} note={note} />}
           {layout === "stamp" && <Stamp title={title} body={body} note={note} />}
@@ -120,7 +120,7 @@ export default SlideRenderer;
 
 function Hero({ title, body, note }) {
   return (
-    <div className="flex flex-col gap-[2.6cqh] overflow-hidden">
+    <div className="flex flex-col gap-[1.8cqh] overflow-hidden">
       <h2
         className="font-serif leading-[1.06] tracking-tightish"
         style={{ fontSize: headlineFs(title.length, false) }}
@@ -128,12 +128,12 @@ function Hero({ title, body, note }) {
         {title}
       </h2>
       <div className="h-px w-[10cqh] bg-current opacity-60 shrink-0" />
-      <p className="leading-[1.55] opacity-95" style={{ fontSize: bodyFs(body.length) }}>
+      <p className="leading-[1.4] opacity-95" style={{ fontSize: bodyFs(body.length) }}>
         {body}
       </p>
       {note ? (
         <div
-          className="mt-[1cqh] uppercase tracking-[0.18em] opacity-65"
+          className="uppercase tracking-[0.18em] opacity-65"
           style={{ fontSize: LABEL_FS_MD }}
         >
           {note}
@@ -145,17 +145,17 @@ function Hero({ title, body, note }) {
 
 function Split({ title, body, note }) {
   return (
-    <div className="flex flex-col gap-[3cqh] overflow-hidden">
+    <div className="flex flex-col gap-[2cqh] overflow-hidden">
       <h2
         className="font-serif leading-[1.07]"
         style={{ fontSize: headlineFs(Math.max(40, title.length), false) }}
       >
         {title}
       </h2>
-      <div className="flex gap-[3cqh] overflow-hidden">
+      <div className="flex gap-[2cqh] overflow-hidden">
         <div className="w-[3px] bg-current opacity-40 shrink-0" />
-        <div className="flex flex-col gap-[1.8cqh] overflow-hidden">
-          <p className="leading-[1.55] opacity-95" style={{ fontSize: bodyFs(body.length) }}>
+        <div className="flex flex-col gap-[1.4cqh] overflow-hidden">
+          <p className="leading-[1.4] opacity-95" style={{ fontSize: bodyFs(body.length) }}>
             {body}
           </p>
           {note ? (
@@ -171,16 +171,16 @@ function Split({ title, body, note }) {
 
 function Stamp({ title, body, note }) {
   return (
-    <div className="flex flex-col gap-[2.6cqh] overflow-hidden">
+    <div className="flex flex-col gap-[1.8cqh] overflow-hidden">
       {note ? (
         <div
-          className="inline-block self-start border border-current/70 px-[1.8cqh] py-[0.8cqh] uppercase tracking-[0.22em]"
+          className="inline-block self-start border border-current/70 px-[1.6cqh] py-[0.6cqh] uppercase tracking-[0.22em]"
           style={{ fontSize: LABEL_FS_MD }}
         >
           {note}
         </div>
       ) : (
-        <div className="flex items-center gap-[1.4cqh] opacity-60">
+        <div className="flex items-center gap-[1.2cqh] opacity-60">
           <div className="h-[3px] w-[6cqh] bg-current" />
           <div className="h-[3px] w-[2cqh] bg-current" />
         </div>
@@ -188,7 +188,7 @@ function Stamp({ title, body, note }) {
       <h2 className="font-serif leading-[1.08]" style={{ fontSize: headlineFs(title.length, false) }}>
         {title}
       </h2>
-      <p className="leading-[1.55] opacity-95" style={{ fontSize: bodyFs(body.length) }}>
+      <p className="leading-[1.4] opacity-95" style={{ fontSize: bodyFs(body.length) }}>
         {body}
       </p>
     </div>
@@ -197,7 +197,7 @@ function Stamp({ title, body, note }) {
 
 function Centered({ title, body, note, big }) {
   return (
-    <div className="flex flex-col items-center justify-center text-center gap-[3cqh] overflow-hidden mx-auto max-w-[92%]">
+    <div className="flex flex-col items-center justify-center text-center gap-[2cqh] overflow-hidden mx-auto max-w-[92%]">
       <div className="uppercase tracking-[0.24em] opacity-70" style={{ fontSize: LABEL_FS_LG }}>
         {title}
       </div>
@@ -218,11 +218,11 @@ function Centered({ title, body, note, big }) {
 
 function Labeled({ title, body, note }) {
   return (
-    <div className="flex flex-col gap-[2.4cqh] overflow-hidden">
+    <div className="flex flex-col gap-[1.8cqh] overflow-hidden">
       <div className="uppercase tracking-[0.22em] opacity-70" style={{ fontSize: LABEL_FS_LG }}>
         {title}
       </div>
-      <p className="leading-[1.55] opacity-95" style={{ fontSize: bodyFs(body.length) }}>
+      <p className="leading-[1.4] opacity-95" style={{ fontSize: bodyFs(body.length) }}>
         {body}
       </p>
       {note ? (
@@ -236,10 +236,10 @@ function Labeled({ title, body, note }) {
 
 function QuoteLike({ title, body, note }) {
   return (
-    <div className="flex flex-col gap-[2cqh] overflow-hidden">
-      <div className="font-serif leading-none opacity-55" style={{ fontSize: fs(56, 11, 180) }}>“</div>
+    <div className="flex flex-col gap-[1.5cqh] overflow-hidden">
+      <div className="font-serif leading-none opacity-55" style={{ fontSize: fs(48, 10, 160) }}>"</div>
       <p
-        className="font-serif leading-[1.28] -mt-[2cqh]"
+        className="font-serif leading-[1.28] -mt-[1.5cqh]"
         style={{ fontSize: headlineFs(Math.max(60, body.length), false) }}
       >
         {body}
