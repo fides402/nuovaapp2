@@ -102,10 +102,11 @@ async function callWithRotation(options, keys) {
 // total free capacity without any cost.
 const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 const OPENROUTER_FREE_MODELS = [
-  "meta-llama/llama-3.3-70b-instruct:free",   // best quality, same as Groq
-  "qwen/qwen-2.5-72b-instruct:free",           // strong alternative
-  "mistralai/mistral-small-3.1-24b-instruct:free",
-  "google/gemma-3-27b-it:free",
+  "meta-llama/llama-3.3-70b-instruct:free",          // Llama 3.3 70b — qualità top
+  "google/gemma-3-27b-it:free",                       // Gemma 3 27b — Google
+  "deepseek/deepseek-chat-v3-0324:free",              // DeepSeek V3
+  "mistralai/mistral-small-3.1-24b-instruct:free",   // Mistral Small
+  "qwen/qwen3-8b:free",                               // Qwen 3 8b
 ];
 
 async function callOpenRouter({ apiKey, system, prompt, temperature = 0.8, modelIndex = 0 }) {
@@ -156,7 +157,7 @@ async function callOpenRouterWithRotation(options, keys) {
   const list = keys.filter(Boolean);
   if (!list.length) throw new Error("Nessuna OpenRouter API key configurata.");
   // Try each free model in order across all keys
-  const totalAttempts = Math.min(OPENROUTER_FREE_MODELS.length * list.length, 6);
+  const totalAttempts = Math.min(OPENROUTER_FREE_MODELS.length * list.length, 8);
   let lastErr;
   for (let attempt = 0; attempt < totalAttempts; attempt++) {
     const key = list[attempt % list.length];
@@ -167,14 +168,17 @@ async function callOpenRouterWithRotation(options, keys) {
       lastErr = e;
       const m = String(e.message || "");
       const isAbort = e.name === "AbortError";
-      const transient = isAbort || /429|RATE|quota|exhaust|503|500|fetch|network|connect|failed/i.test(m);
+      // 404 = model removed/renamed on OpenRouter → skip to next model immediately
+      const is404 = /404|no endpoint|not found/i.test(m);
+      const transient = isAbort || is404 || /429|RATE|quota|exhaust|503|502|500|fetch|network|connect|failed/i.test(m);
       if (!transient) throw e;
-      if (attempt < totalAttempts - 1) {
+      // For 404 (model gone) don't wait — just move to next model immediately
+      if (!is404 && attempt < totalAttempts - 1) {
         await sleep(Math.min(16000, 2000 * Math.pow(2, attempt % 3)));
       }
     }
   }
-  throw lastErr || new Error("OpenRouter: tutti i modelli free esauriti.");
+  throw lastErr || new Error("OpenRouter: tutti i modelli esauriti.");
 }
 
 // ── Groq fallback ─────────────────────────────────────────────────────────────
