@@ -43,7 +43,7 @@ export default function AdminPage() {
       const res = await fetch("/api/ai/login-start", { method: "POST" });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error);
-      setActionMsg("Browser aperto su ChatGPT. Accedi nel viewer VNC qui sotto, poi clicca "Salva sessione".");
+      setActionMsg('Browser aperto su ChatGPT. Accedi nel viewer VNC qui sotto, poi clicca "Salva sessione".');
     } catch (e) {
       setActionErr(e.message);
     } finally {
