@@ -151,25 +151,31 @@ app.get("/viewer", (req, res) => {
 
 app.use("/novnc/static", express.static(NOVNC_STATIC));
 
-// ── WebSocket → websockify raw TCP proxy ───────────────────────────────────────
-// Instead of interpreting VNC/WebSocket frames ourselves, we raw-proxy the
-// upgrade connection straight to websockify (which handles the VNC bridging).
+// ── WebSocket → websockify TCP proxy ──────────────────────────────────────────
+// Forward the WebSocket upgrade to websockify (port 6080) which bridges to VNC.
+// We reconstruct clean WebSocket headers because proxies may alter them.
 server.on("upgrade", (req, socket, head) => {
   if (req.url === "/websockify") {
     const proxy = net.connect(WEBSOCKIFY_PORT, "127.0.0.1", () => {
-      // Replay the raw HTTP upgrade request to websockify
-      let headers = `${req.method} ${req.url} HTTP/1.1\r\n`;
-      for (let i = 0; i < req.rawHeaders.length; i += 2) {
-        headers += `${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}\r\n`;
-      }
-      headers += "\r\n";
-      proxy.write(headers);
+      // Build a clean, minimal WebSocket upgrade request for websockify
+      const key = req.headers["sec-websocket-key"] || "";
+      const proto = req.headers["sec-websocket-protocol"] || "";
+      let hs = "GET /websockify HTTP/1.1\r\n";
+      hs += "Host: localhost\r\n";
+      hs += "Upgrade: websocket\r\n";
+      hs += "Connection: Upgrade\r\n";
+      hs += `Sec-WebSocket-Key: ${key}\r\n`;
+      hs += "Sec-WebSocket-Version: 13\r\n";
+      if (proto) hs += `Sec-WebSocket-Protocol: ${proto}\r\n`;
+      hs += "\r\n";
+      proxy.write(hs);
       if (head && head.length > 0) proxy.write(head);
+      // Bidirectional pipe — raw bytes flow unchanged in both directions
       socket.pipe(proxy);
       proxy.pipe(socket);
     });
     proxy.on("error", (e) => {
-      console.error("[ws-proxy] websockify not ready:", e.message);
+      console.error("[ws-proxy] websockify error:", e.message);
       socket.destroy();
     });
     socket.on("error", () => proxy.destroy());
