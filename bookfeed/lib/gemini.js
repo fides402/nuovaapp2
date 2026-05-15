@@ -134,7 +134,8 @@ async function callOpenRouter({ apiKey, system, prompt, temperature = 0.8, model
         ],
         temperature,
         max_tokens: 8192,
-        response_format: { type: "json_object" },
+        // NON forzare json_object: molti modelli free non lo supportano e restituiscono vuoto.
+        // Il JSON viene estratto dal testo con regex nel parser sotto.
       }),
       signal: controller.signal,
     });
@@ -148,11 +149,13 @@ async function callOpenRouter({ apiKey, system, prompt, temperature = 0.8, model
   const data = await res.json();
   const text = data?.choices?.[0]?.message?.content || "";
   if (!text) throw new Error(`Risposta OpenRouter[${model}] vuota.`);
-  try { return JSON.parse(text); } catch {
-    const m = text.match(/\{[\s\S]*\}$/);
-    if (m) { try { return JSON.parse(m[0]); } catch {} }
-    throw new Error(`JSON OpenRouter non valido: ${text.slice(0, 200)}`);
-  }
+  // Prova parse diretto, poi estrai da blocchi ```json...``` o primo { ... } nel testo
+  try { return JSON.parse(text); } catch { /* not clean JSON */ }
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) { try { return JSON.parse(fence[1].trim()); } catch {} }
+  const brace = text.match(/\{[\s\S]*\}/);
+  if (brace) { try { return JSON.parse(brace[0]); } catch {} }
+  throw new Error(`JSON OpenRouter non valido: ${text.slice(0, 200)}`);
 }
 
 async function callOpenRouterWithRotation(options, keys) {
