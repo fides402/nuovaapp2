@@ -83,6 +83,21 @@ const TRANSFORM_MARKERS = [
 ];
 const ENUMERATION = /\b(first|second|third|finally|primo|secondo|terzo|infine)\b/i;
 
+// High-value patterns: contrarian claims, prescriptive rules, named concepts.
+// These are almost always the unique insights in a chapter — score them highly.
+const CONTRARIAN_RE = [
+  /\b(contrary to|despite|against|wrong|myth|actually|in reality|counterintuitive|paradox|unlike what|not what)\b/i,
+  /\b(al contrario|invece di|sbagliato|mito|errore comune|in realtà|eppure|paradossalmente|controintuitiv|a differenza|non è vero|non significa)\b/i,
+];
+const PRESCRIPTIVE_RE = [
+  /\b(must|should|avoid|never|always|the key|the secret|crucial|essential|the trick|the rule|you need to|the principle)\b/i,
+  /\b(devi|dovresti|evita|non fare|bisogna|sempre|mai|la chiave|il segreto|fondamentale|essenziale|il trucco|la regola|il principio)\b/i,
+];
+// Author's named concepts: "The X Effect", "X Technique", "X Principle", etc.
+const NAMED_CONCEPT_RE = /\b[A-ZÀ-Ý][a-zà-ý]{2,}(?:\s+[A-ZÀ-Ý][a-zà-ý]{2,}){0,3}\s+(?:Effect|Principle|Method|Technique|Law|Rule|Model|Framework|Theory|Approach|Concept|Effetto|Principio|Metodo|Tecnica|Legge|Regola|Modello|Teoria|Concetto)\b/;
+// Specific enumerations — numbered rules/steps/tips are usually the most memorable content
+const SPECIFIC_LIST_RE = /\b(?:three|four|five|six|tre|quattro|cinque|sei|\d)\s+(?:step|rule|tip|principle|technique|phase|reason|way|cosa|regola|principio|tecnica|fase|motivo|modo)\b/i;
+
 function scoreSentence(s, idf, freq) {
   const tks = tokens(s);
   if (tks.length < 6) return 0;
@@ -98,10 +113,16 @@ function scoreSentence(s, idf, freq) {
   for (const t of tks) recur += Math.log(1 + (freq.get(t) || 0));
   score += (recur / tks.length) * 0.6;
 
-  // Pattern boosts
-  for (const re of DEF_PATTERNS) if (re.test(s)) { score += 1.6; break; }
-  for (const re of TRANSFORM_MARKERS) if (re.test(s)) { score += 1.2; break; }
+  // Pattern boosts — general
+  for (const re of DEF_PATTERNS) if (re.test(s)) { score += 1.2; break; }
+  for (const re of TRANSFORM_MARKERS) if (re.test(s)) { score += 1.0; break; }
   if (ENUMERATION.test(s)) score += 0.4;
+
+  // High-value boosts: contrarian > prescriptive > named concept > numbered list
+  for (const re of CONTRARIAN_RE) if (re.test(s)) { score += 2.2; break; }
+  for (const re of PRESCRIPTIVE_RE) if (re.test(s)) { score += 1.4; break; }
+  if (NAMED_CONCEPT_RE.test(s)) score += 1.8;
+  if (SPECIFIC_LIST_RE.test(s)) score += 0.8;
 
   // Length sweet-spot 70-280 chars
   const L = s.length;

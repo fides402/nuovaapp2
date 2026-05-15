@@ -120,6 +120,7 @@ export default function BookPanel({ book: initialBook, settings, onClose, onCaro
     try {
       setPhase("generating");
       const model = MODELS[settings.mode] || MODELS.economy;
+      let failed = 0;
       for (let i = 0; i < queue.length; i++) {
         if (cancelRef.current.cancelled) break;
         const ch = queue[i];
@@ -148,10 +149,18 @@ export default function BookPanel({ book: initialBook, settings, onClose, onCaro
           const updatedList = await listCarousels(book.id);
           setExisting(updatedList);
         } catch (e) {
+          failed++;
           console.warn("Chapter carousel failed:", ch.title, e);
         }
+        // Brief pause between chapters — avoids hitting rate limits on long batches
+        if (i < queue.length - 1 && !cancelRef.current.cancelled) {
+          await new Promise((r) => setTimeout(r, 1200));
+        }
       }
-      setProgress({ current: queue.length, total: queue.length, label: "Completato." });
+      const doneLabel = failed > 0
+        ? `Completato. ${failed} capitolo${failed !== 1 ? "i" : ""} non generato${failed !== 1 ? "i" : ""} — riprova selezionandoli.`
+        : "Completato.";
+      setProgress({ current: queue.length, total: queue.length, label: doneLabel });
       setPhase("done");
     } catch (e) {
       setError(e.message);

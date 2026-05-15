@@ -10,6 +10,8 @@ export const MODELS = {
   deep: "gemini-2.5-pro",
 };
 
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
 async function callGemini({ apiKey, model, system, prompt, jsonMode = true, temperature = 0.7 }) {
   if (!apiKey) throw new Error("API key Gemini mancante. Aprila nelle Impostazioni.");
   const url = `${ENDPOINT}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -29,11 +31,20 @@ async function callGemini({ apiKey, model, system, prompt, jsonMode = true, temp
       { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
     ],
   };
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  // 90s hard timeout so a hung request never blocks the batch forever
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 90000);
+  let res;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
   if (!res.ok) {
     const t = await res.text();
     throw new Error(`Gemini ${res.status}: ${t.slice(0, 280)}`);
@@ -51,22 +62,31 @@ async function callGemini({ apiKey, model, system, prompt, jsonMode = true, temp
   }
 }
 
-// Rotate through multiple keys; on 429/RATE_LIMIT advance.
+// Rotate through keys; on 429/5xx/timeout retry with exponential backoff.
+// With 1 key: up to 5 attempts at 2 s → 4 s → 8 s → 16 s.
+// With N keys: cycles through all keys on each attempt.
 async function callWithRotation(options, keys) {
   const list = keys.filter(Boolean);
   if (list.length === 0) throw new Error("Aggiungi almeno una API key nelle Impostazioni.");
+  const MAX_ATTEMPTS = 5;
   let lastErr;
-  for (let i = 0; i < list.length; i++) {
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const key = list[attempt % list.length];
     try {
-      return await callGemini({ ...options, apiKey: list[i] });
+      return await callGemini({ ...options, apiKey: key });
     } catch (e) {
       lastErr = e;
       const m = String(e.message || "");
-      const transient = /429|RATE|quota|exhaust|503|500/i.test(m);
-      if (!transient) throw e;
+      const isAbort = e.name === "AbortError";
+      const transient = isAbort || /429|RATE|quota|exhaust|503|500/i.test(m);
+      if (!transient) throw e; // auth errors, invalid key, etc. — fail immediately
+      if (attempt < MAX_ATTEMPTS - 1) {
+        const delay = Math.min(32000, 2000 * Math.pow(2, attempt)); // 2 s, 4 s, 8 s, 16 s
+        await sleep(delay);
+      }
     }
   }
-  throw lastErr || new Error("Tutte le API key hanno fallito.");
+  throw lastErr || new Error("Tutte le API key hanno fallito dopo più tentativi.");
 }
 
 export async function selectConcepts({ keys, model, bookMeta, brief, candidates, targetCount = 6, language = "it" }) {
@@ -110,51 +130,73 @@ Non includere altro. Niente commenti.`;
 }
 
 export async function generateChapterCarousel({ keys, model, bookMeta, chapter, candidates, language = "it" }) {
-  const system = `Sei insieme un editor di idee e un autore di caroselli social per un feed personale di conoscenza.
-Tagliente, profondo, sintetico. Niente luoghi comuni. Niente riassunti scolastici.
-Identifichi L'INSIGHT più potente del capitolo e lo trasformi in un carosello memorabile.
-Stile: minimal premium, asciutto, denso. Frasi brevi. Niente emoji. Niente clickbait infantile.
-${language === "it" ? "Lavori in italiano impeccabile." : "Work in flawless English."}
+  const lang = language === "it" ? "italiano" : "English";
+  const system = `Sei un editor radicale che estrae conoscenza trasformativa dai libri per un feed personale.
+Il tuo compito: trovare L'IDEA CHE SOLO QUESTO CAPITOLO CONTIENE — non un riassunto, non una generalità.
+
+REGOLA D'ORO — test di specificità (obbligatorio): prima di scegliere un insight, chiediti
+"questo si troverebbe in qualsiasi libro sull'argomento?" — se sì, scarta e scava ancora.
+
+Cosa cercare (in ordine di priorità):
+1. Tecniche specifiche con nome proprio introdotte dall'autore
+2. Distinzioni non ovvie: "X non è Y, è Z"
+3. Principi controintuitivi o sorprendenti
+4. Regole operative precise: "fai sempre X", "evita Y perché Z"
+5. Il framework concettuale originale del capitolo
+
+Cosa evitare assolutamente:
+- Ovvietà del genere ("bisogna praticare", "la melodia deve comunicare emozioni", "ascoltare è importante")
+- Riassunti neutri ("in questo capitolo l'autore spiega…")
+- Affermazioni che chiunque già conosce
+
+Stile: minimal premium, frasi brevi, denso, niente emoji.
+Lavora in ${lang} impeccabile.
 Rispondi SEMPRE in JSON valido aderente allo schema richiesto.`;
 
   const numbered = (candidates || []).map((c, i) => `[${i + 1}] ${c.text}`).join("\n");
 
   const prompt = `Libro: "${bookMeta.title || "Senza titolo"}"${bookMeta.author ? " — " + bookMeta.author : ""}
 Capitolo: "${chapter.title}"
-${chapter.synthetic ? "(Sezione del libro: non c'è un titolo originale, è un blocco di testo.)" : ""}
+${chapter.synthetic ? "(Sezione del libro senza titolo originale.)" : ""}
 
-Ho selezionato algoritmicamente i passaggi più salienti di questo capitolo. Studialo come un editor:
-- Trova L'INSIGHT più potente e meno banale del capitolo (UN solo concetto, non un riassunto).
-- Riformulalo con parole tue, in modo che resti in mente.
-- Poi costruisci un carosello da ESATTAMENTE 10 slide su quell'insight.
+PASSAGGI SALIENTI DEL CAPITOLO (selezionati algoritmicamente):
+${numbered || "(nessun candidato — usa il titolo del capitolo come spunto)"}
 
-PASSAGGI SALIENTI DEL CAPITOLO:
-${numbered || "(nessun candidato — usa solo il titolo del capitolo come spunto)"}
+ISTRUZIONI (leggi prima di scrivere):
+1. Analizza i passaggi come editor esperto. Cerca specificamente:
+   - Qualsiasi tecnica o concetto a cui l'autore dà un nome preciso
+   - Qualsiasi affermazione che contraddice l'intuizione comune
+   - Qualsiasi regola operativa precisa con un meccanismo specifico
+   - Il framework o la distinzione centrale che struttura questo capitolo
+2. Scegli UN SOLO insight — il più specifico e meno prevedibile.
+   Se il candidato ovvio è generico, scartalo e cerca il secondo livello.
+3. Riformula quell'insight in modo tagliente: deve avere senso anche per chi non ha letto il libro.
+4. Costruisci un carosello da ESATTAMENTE 10 slide su quell'unico insight, approfondendo sempre LO STESSO concetto.
 
-STRUTTURA DELLE 10 SLIDE (rispetta i ruoli in ordine):
-1. hook — promessa o frase magnetica
-2. tension — perché senza questo insight si sbaglia
-3. false_premise — l'errore di pensiero da smontare
-4. core — l'insight in 1 frase scolpita
-5. explanation — perché funziona, linguaggio piano
-6. example — uno scenario concreto o quotidiano
-7. implication — cosa cambia in chi lo capisce davvero
-8. mistake — la trappola classica da evitare
-9. synthesis — la frase memorabile da tatuarsi
-10. question — domanda finale che apre, non chiude
+STRUTTURA DELLE 10 SLIDE:
+1. hook — promessa magnetica basata sull'insight specifico (non generica)
+2. tension — il problema specifico che questo insight risolve
+3. false_premise — l'errore di pensiero comune che il capitolo smonta
+4. core — l'insight in 1 frase scolpita, la più precisa possibile
+5. explanation — il meccanismo specifico: perché funziona così
+6. example — scenario concreto in cui si applica questa idea esatta
+7. implication — cosa cambia concretamente in chi lo adotta
+8. mistake — la trappola specifica che l'autore avverte di evitare
+9. synthesis — la frase memorabile da ricordare tra 6 mesi
+10. question — domanda che provoca riflessione a partire dall'insight
 
 OUTPUT JSON ESATTO:
 {
   "insight": {
-    "title": "titolo dell'insight, max 7 parole",
+    "title": "titolo dell'insight, max 7 parole, tagliente",
     "thesis": "1 frase: cosa afferma esattamente"
   },
-  "title": "titolo del carosello (può coincidere con l'insight)",
-  "concept": "1 frase: il cuore",
-  "tags": ["3-5 tag, minuscoli"],
+  "title": "titolo del carosello",
+  "concept": "1 frase: il cuore dell'idea",
+  "tags": ["3-5 tag minuscoli"],
   "depth": 1-5,
   "quality": 1-5,
-  "caption": "didascalia 2-4 frasi, evocativa ma non vaga",
+  "caption": "didascalia 2-4 frasi evocative",
   "slides": [
     {"role": "hook", "title": "...", "body": "...", "note": ""},
     {"role": "tension", "title": "...", "body": "...", "note": ""},
@@ -169,18 +211,17 @@ OUTPUT JSON ESATTO:
   ]
 }
 
-Regole rigide di forma (obbligatorie, le violazioni rovinano il layout):
-- "title" di ogni slide: max 6 parole, niente punteggiatura finale.
-- "body" — limite di CARATTERI per ruolo:
-  · hook → max 130
-  · tension, false_premise, mistake → max 200
-  · core → max 100, una sola frase memorabile
-  · explanation, example, implication → max 220
-  · synthesis → max 90, una sola frase scolpita
-  · question → max 150, deve finire con "?"
-- "note": opzionale, max 28 caratteri (parola chiave, numero, micro-citazione).
-- Niente emoji. Niente hashtag dentro le slide.
-- Frasi brevi. Niente "in conclusione", "in sintesi", "quindi" come incipit.`;
+LIMITI DI CARATTERI (obbligatori, violazioni = layout rotto):
+- "title" di ogni slide: max 6 parole, senza punteggiatura finale.
+- "body":
+  · hook → max 130 caratteri
+  · tension, false_premise, mistake → max 200 caratteri
+  · core → max 100 caratteri, una sola frase
+  · explanation, example, implication → max 220 caratteri
+  · synthesis → max 90 caratteri, una sola frase
+  · question → max 150 caratteri, deve finire con "?"
+- "note": max 28 caratteri (parola chiave, numero, micro-citazione).
+- Niente emoji, niente hashtag nelle slide, niente "in conclusione" / "in sintesi" come incipit.`;
 
   const data = await callWithRotation({ model, system, prompt, jsonMode: true, temperature: 0.75 }, keys);
   if (!Array.isArray(data?.slides) || data.slides.length !== 10) {
