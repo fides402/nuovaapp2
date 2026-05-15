@@ -1,0 +1,14 @@
+{
+  "name": "bookfeed-gpt-server",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node index.js",
+    "install:browsers": "npx playwright install chromium --with-deps"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "playwright": "^1.44.1",
+    "ws": "^8.17.1"
+  }
+}

@@ -95,7 +95,7 @@ export const SettingsStore = {
 export const DEFAULT_SETTINGS = {
   apiKeys: ["", ""],      // Gemini keys
   groqApiKeys: [""],      // Groq keys (fallback)
-  mode: "economy", // 'economy' | 'deep'
+  mode: "economy", // 'economy' | 'deep' | 'chatgpt'
   conceptCount: 6,
   language: "it",
   theme: "dark",

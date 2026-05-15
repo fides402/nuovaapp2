@@ -307,7 +307,7 @@ export default function BookPanel({ book: initialBook, settings, onClose, onMini
 
           <div className="mt-5 flex items-center justify-between gap-3 flex-wrap">
             <span className="text-xs text-muted">
-              Modalità: <b className="text-ink">{settings.mode === "deep" ? "profonda" : "economica"}</b> · {selected.size} capitoli selezionati
+              Modalità: <b className="text-ink">{settings.mode === "deep" ? "profonda" : settings.mode === "chatgpt" ? "ChatGPT" : "economica"}</b> · {selected.size} capitoli selezionati
             </span>
             <button
               onClick={handleGenerate}

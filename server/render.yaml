@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: bookfeed-gpt
+    runtime: docker
+    plan: free
+    healthCheckPath: /status
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: PROFILE_DIR
+        # Ephemeral filesystem: session persists through sleep/wake but is lost on redeploy.
+        value: /data/chrome-profile

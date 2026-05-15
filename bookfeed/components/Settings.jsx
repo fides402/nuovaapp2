@@ -98,7 +98,14 @@ export default function Settings({ open, onClose, onSaved }) {
             <div className="grid grid-cols-2 gap-2">
               <Choice active={s.mode === "economy"} onClick={() => update({ mode: "economy" })} title="Economica" subtitle="gemini-2.5-flash · meno crediti" />
               <Choice active={s.mode === "deep"} onClick={() => update({ mode: "deep" })} title="Profonda" subtitle="gemini-2.5-pro · più qualità" />
+              <Choice active={s.mode === "chatgpt"} onClick={() => update({ mode: "chatgpt" })} title="ChatGPT" subtitle="web automation · nessuna API key" />
             </div>
+            {s.mode === "chatgpt" && (
+              <p className="text-xs text-muted mt-2 leading-relaxed">
+                Richiede il server Render configurato. Vai su{" "}
+                <a href="/admin" className="underline">Admin → ChatGPT</a> per il setup e il login.
+              </p>
+            )}
           </div>
 
           <div>

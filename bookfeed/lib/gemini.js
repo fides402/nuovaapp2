@@ -3,6 +3,7 @@
 // Gemini API wrapper using REST directly (no SDK = smaller bundle, no quirks).
 // All calls are client-side; key is read from localStorage in the UI layer.
 // Groq (llama-3.3-70b-versatile) is used as automatic fallback when Gemini fails.
+// ChatGPT (web automation via Render server) is an optional third provider.
 
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
@@ -12,6 +13,7 @@ const GROQ_MODEL = "llama-3.3-70b-versatile";
 export const MODELS = {
   economy: "gemini-2.5-flash",
   deep: "gemini-2.5-pro",
+  chatgpt: "chatgpt", // routed through Render server
 };
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
@@ -202,6 +204,48 @@ Non includere altro. Niente commenti.`;
   return data.concepts;
 }
 
+// ── ChatGPT (Render server) ────────────────────────────────────────────────────
+// Sends the combined system+user prompt to /api/ai/generate (Next.js proxy)
+// and parses JSON from ChatGPT's response (which may be in a markdown code block).
+
+async function callChatGPT({ system, prompt }) {
+  const combined = `${system}\n\n---\n\n${prompt}`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 160000);
+  let res;
+  try {
+    res = await fetch("/api/ai/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: combined }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`ChatGPT proxy ${res.status}: ${t.slice(0, 280)}`);
+  }
+  const data = await res.json();
+  if (!data.ok) throw new Error(`ChatGPT: ${data.error || "risposta non valida."}`);
+  const text = data.response || "";
+  if (!text) throw new Error("Risposta ChatGPT vuota.");
+  // Parse JSON — may be wrapped in ```json ... ```
+  const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const raw = jsonMatch ? jsonMatch[1].trim() : text.trim();
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // Last resort: find the outermost {...}
+    const objMatch = raw.match(/\{[\s\S]*\}/);
+    if (objMatch) {
+      try { return JSON.parse(objMatch[0]); } catch {}
+    }
+    throw new Error("JSON ChatGPT non valido: " + raw.slice(0, 200));
+  }
+}
+
 export async function generateChapterCarousel({ keys, groqKeys, model, bookMeta, chapter, candidates, language = "it" }) {
   const lang = language === "it" ? "italiano" : "English";
 
@@ -285,11 +329,16 @@ LIMITI DI CARATTERI (obbligatori — violazioni rompono il layout):
 - "note": max 28 caratteri (parola chiave, numero, micro-citazione).
 - Niente emoji, niente hashtag nelle slide.`;
 
-  // Try Gemini first; fall back to Groq if Gemini exhausts all retries
+  // Route to the right AI provider
   let raw;
   const geminiKeys = (keys || []).filter(Boolean);
   const hasGroq = (groqKeys || []).some(Boolean);
-  if (geminiKeys.length > 0) {
+
+  if (model === "chatgpt") {
+    // ChatGPT via Render server (no API key needed client-side)
+    raw = await callChatGPT({ system, prompt });
+  } else if (geminiKeys.length > 0) {
+    // Try Gemini first; fall back to Groq if Gemini exhausts all retries
     try {
       raw = await callWithRotation({ model, system, prompt, jsonMode: true, temperature: 0.8 }, geminiKeys);
     } catch (geminiErr) {
@@ -301,7 +350,7 @@ LIMITI DI CARATTERI (obbligatori — violazioni rompono il layout):
     // Only Groq keys configured
     raw = await callGroqWithRotation({ system, prompt, temperature: 0.8 }, groqKeys);
   } else {
-    throw new Error("Aggiungi almeno una API key (Gemini o Groq) nelle Impostazioni.");
+    throw new Error("Aggiungi almeno una API key (Gemini o Groq) nelle Impostazioni, oppure configura ChatGPT in /admin.");
   }
 
   // Accept 6–13 slides: strict !== 10 caused silent failures when Gemini/Groq returned 9 or 11

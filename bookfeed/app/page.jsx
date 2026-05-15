@@ -123,9 +123,12 @@ export default function Home() {
             <span className="text-[10px] uppercase tracking-[0.22em] text-muted ml-1">private</span>
           </div>
           <div className="flex items-center gap-2">
-            {!hasKey && (
+            {!hasKey && settings.mode !== "chatgpt" && (
               <span className="hidden sm:inline-block text-[11px] uppercase tracking-[0.22em] text-muted">No key</span>
             )}
+            <a href="/admin" className="btn btn-ghost px-3 py-1.5 text-sm hidden sm:inline-flex">
+              Admin
+            </a>
             <button onClick={() => setSettingsOpen(true)} className="btn btn-ghost px-3 py-1.5 text-sm">
               Impostazioni
             </button>
