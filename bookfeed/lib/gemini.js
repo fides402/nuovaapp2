@@ -131,59 +131,48 @@ Non includere altro. Niente commenti.`;
 
 export async function generateChapterCarousel({ keys, model, bookMeta, chapter, candidates, language = "it" }) {
   const lang = language === "it" ? "italiano" : "English";
-  const system = `Sei un editor radicale che estrae conoscenza trasformativa dai libri per un feed personale.
-Il tuo compito: trovare L'IDEA CHE SOLO QUESTO CAPITOLO CONTIENE — non un riassunto, non una generalità.
 
-REGOLA D'ORO — test di specificità (obbligatorio): prima di scegliere un insight, chiediti
-"questo si troverebbe in qualsiasi libro sull'argomento?" — se sì, scarta e scava ancora.
+  const system = `Sei il ghostwriter di un creator Instagram da 500k follower nel settore della conoscenza trasformativa.
+Il tuo standard: ogni carosello che pubblichi fa pensare "non avevo mai visto questa cosa da quest'angolo."
 
-Cosa cercare (in ordine di priorità):
-1. Tecniche specifiche con nome proprio introdotte dall'autore
-2. Distinzioni non ovvie: "X non è Y, è Z"
-3. Principi controintuitivi o sorprendenti
-4. Regole operative precise: "fai sempre X", "evita Y perché Z"
-5. Il framework concettuale originale del capitolo
+REGOLA 1 — SPECIFICITÀ: l'insight deve essere esclusivo di questo libro/capitolo.
+Se si troverebbe in qualsiasi libro sull'argomento, è sbagliato. Cerca quello sotto.
+Priorità: tecniche con nome proprio, distinzioni "X non è Y ma Z", principi controintuitivi, regole operative precise.
 
-Cosa evitare assolutamente:
-- Ovvietà del genere ("bisogna praticare", "la melodia deve comunicare emozioni", "ascoltare è importante")
-- Riassunti neutri ("in questo capitolo l'autore spiega…")
-- Affermazioni che chiunque già conosce
+REGOLA 2 — STILE: frasi da 3-12 parole. Verbi forti. Niente accademia.
+Vietato: "pertanto", "al fine di", "in quanto", "considerando che", "in questo capitolo".
+Permesso: affermazioni nette, pause drammatiche, il paradosso detto in piano.
 
-Stile: minimal premium, frasi brevi, denso, niente emoji.
-Lavora in ${lang} impeccabile.
-Rispondi SEMPRE in JSON valido aderente allo schema richiesto.`;
+REGOLA 3 — IMPATTO: ogni slide deve poter essere screenshottata da sola.
+La hook ferma lo scroll. La synthesis fa dire "lo salvo". La question resta in testa per ore.
+
+Niente emoji. Niente hashtag nelle slide. Lavori in ${lang} impeccabile.
+Rispondi SEMPRE in JSON valido aderente allo schema.`;
 
   const numbered = (candidates || []).map((c, i) => `[${i + 1}] ${c.text}`).join("\n");
 
   const prompt = `Libro: "${bookMeta.title || "Senza titolo"}"${bookMeta.author ? " — " + bookMeta.author : ""}
 Capitolo: "${chapter.title}"
-${chapter.synthetic ? "(Sezione del libro senza titolo originale.)" : ""}
+${chapter.synthetic ? "(Sezione senza titolo originale.)" : ""}
 
-PASSAGGI SALIENTI DEL CAPITOLO (selezionati algoritmicamente):
-${numbered || "(nessun candidato — usa il titolo del capitolo come spunto)"}
+PASSAGGI SALIENTI:
+${numbered || "(nessun candidato — parti dal titolo del capitolo)"}
 
-ISTRUZIONI (leggi prima di scrivere):
-1. Analizza i passaggi come editor esperto. Cerca specificamente:
-   - Qualsiasi tecnica o concetto a cui l'autore dà un nome preciso
-   - Qualsiasi affermazione che contraddice l'intuizione comune
-   - Qualsiasi regola operativa precisa con un meccanismo specifico
-   - Il framework o la distinzione centrale che struttura questo capitolo
-2. Scegli UN SOLO insight — il più specifico e meno prevedibile.
-   Se il candidato ovvio è generico, scartalo e cerca il secondo livello.
-3. Riformula quell'insight in modo tagliente: deve avere senso anche per chi non ha letto il libro.
-4. Costruisci un carosello da ESATTAMENTE 10 slide su quell'unico insight, approfondendo sempre LO STESSO concetto.
+Trova L'INSIGHT più specifico e sorprendente di questo capitolo.
+Se il primo che ti viene in mente è ovvio (es. "bisogna praticare", "ascoltare aiuta", "la struttura conta"), scarta e cerca quello sottostante.
 
-STRUTTURA DELLE 10 SLIDE:
-1. hook — promessa magnetica basata sull'insight specifico (non generica)
-2. tension — il problema specifico che questo insight risolve
-3. false_premise — l'errore di pensiero comune che il capitolo smonta
-4. core — l'insight in 1 frase scolpita, la più precisa possibile
-5. explanation — il meccanismo specifico: perché funziona così
-6. example — scenario concreto in cui si applica questa idea esatta
-7. implication — cosa cambia concretamente in chi lo adotta
-8. mistake — la trappola specifica che l'autore avverte di evitare
-9. synthesis — la frase memorabile da ricordare tra 6 mesi
-10. question — domanda che provoca riflessione a partire dall'insight
+Costruisci ESATTAMENTE 10 slide che sviluppano una narrativa su quell'unico insight:
+
+1. hook — ferma lo scroll. Una frase contropiedista, provocatoria o sorprendente. Non iniziare con "Scopri" o "Impara".
+2. tension — il problema specifico che il 90% delle persone ha e non sa nominare.
+3. false_premise — la credenza sbagliata da smontare. Netta. Senza ammortizzatori.
+4. core — l'insight in UNA frase scolpita. Come un'equazione. Max 15 parole.
+5. explanation — il meccanismo: perché funziona esattamente così. Piano, diretto.
+6. example — scenario iper-specifico dove vedi l'idea in azione. Concreto al massimo.
+7. implication — cosa cambia concretamente in chi capisce questo. Diretto.
+8. mistake — nomina la trappola precisa. Quella che tutti fanno senza saperlo.
+9. synthesis — LA frase del carosello. Quella che fa dire "lo salvo". Max 12 parole.
+10. question — una domanda che resta in testa. Apre, non chiude. Cambia come guardi qualcosa.
 
 OUTPUT JSON ESATTO:
 {
@@ -211,7 +200,7 @@ OUTPUT JSON ESATTO:
   ]
 }
 
-LIMITI DI CARATTERI (obbligatori, violazioni = layout rotto):
+LIMITI DI CARATTERI (obbligatori — violazioni rompono il layout):
 - "title" di ogni slide: max 6 parole, senza punteggiatura finale.
 - "body":
   · hook → max 130 caratteri
@@ -221,9 +210,9 @@ LIMITI DI CARATTERI (obbligatori, violazioni = layout rotto):
   · synthesis → max 90 caratteri, una sola frase
   · question → max 150 caratteri, deve finire con "?"
 - "note": max 28 caratteri (parola chiave, numero, micro-citazione).
-- Niente emoji, niente hashtag nelle slide, niente "in conclusione" / "in sintesi" come incipit.`;
+- Niente emoji, niente hashtag nelle slide.`;
 
-  const data = await callWithRotation({ model, system, prompt, jsonMode: true, temperature: 0.75 }, keys);
+  const data = await callWithRotation({ model, system, prompt, jsonMode: true, temperature: 0.8 }, keys);
   if (!Array.isArray(data?.slides) || data.slides.length !== 10) {
     throw new Error("Capitolo: serve esattamente 10 slide.");
   }

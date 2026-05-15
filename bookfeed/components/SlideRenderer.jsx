@@ -45,26 +45,27 @@ function fs(min, cqh, max) {
 }
 
 // Body font sizing per text length.
-// minPx is what we want on the SMALLEST mobile canvas (≥ 18 px for comfort).
+// minPx: floor for smallest canvases — kept low so multi-line text never clips.
+// The cqh value does the real work; user can pinch-zoom for detail if needed.
 function bodyFs(len) {
-  if (len <= 100) return fs(22, 5.8, 70);
-  if (len <= 160) return fs(20, 5.2, 64);
-  if (len <= 220) return fs(18, 4.7, 58);
-  return fs(17, 4.3, 54);
+  if (len <= 100) return fs(15, 5.8, 70);
+  if (len <= 160) return fs(14, 5.2, 64);
+  if (len <= 220) return fs(13, 4.7, 58);
+  return fs(12, 4.3, 54);
 }
 function headlineFs(len, big) {
   const k = big ? 1.12 : 1.0;
-  if (len <= 28) return fs(Math.round(34 * k), 11.0 * k, Math.round(140 * k));
-  if (len <= 50) return fs(Math.round(30 * k), 9.0 * k, Math.round(120 * k));
-  if (len <= 80) return fs(Math.round(26 * k), 7.0 * k, Math.round(96 * k));
-  if (len <= 120) return fs(Math.round(23 * k), 5.8 * k, Math.round(82 * k));
-  if (len <= 180) return fs(Math.round(21 * k), 5.0 * k, Math.round(70 * k));
-  return fs(Math.round(19 * k), 4.4 * k, Math.round(64 * k));
+  if (len <= 28) return fs(Math.round(22 * k), 11.0 * k, Math.round(140 * k));
+  if (len <= 50) return fs(Math.round(20 * k), 9.0 * k, Math.round(120 * k));
+  if (len <= 80) return fs(Math.round(18 * k), 7.0 * k, Math.round(96 * k));
+  if (len <= 120) return fs(Math.round(16 * k), 5.8 * k, Math.round(82 * k));
+  if (len <= 180) return fs(Math.round(14 * k), 5.0 * k, Math.round(70 * k));
+  return fs(Math.round(13 * k), 4.4 * k, Math.round(64 * k));
 }
-// Small uppercase labels (kicker, footer, role label, note).
-const LABEL_FS = fs(12, 2.8, 28);
-const LABEL_FS_MD = fs(13, 3.0, 32);
-const LABEL_FS_LG = fs(14, 3.2, 36);
+// Small uppercase labels (kicker, footer, note).
+const LABEL_FS = fs(10, 2.8, 28);
+const LABEL_FS_MD = fs(11, 3.0, 32);
+const LABEL_FS_LG = fs(12, 3.2, 36);
 
 const SlideRenderer = forwardRef(function SlideRenderer(
   { slide, index, total = 10, bookTitle = "", bookAuthor = "", invert = false, accentSlide = false },
