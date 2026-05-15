@@ -218,9 +218,23 @@ function flattenOutline(items, depth = 0, out = []) {
 }
 
 async function chaptersFromOutline(pdf, flat, pageOffsets, totalChars) {
-  const points = [];
+  // Group outline items by depth; use the shallowest depth that has >= 3 entries.
+  // Many PDFs have chapters at depth 1 (under a root "Contents" node at depth 0).
+  const byDepth = {};
   for (const it of flat) {
-    if (!it.dest || it.depth > 0) continue; // top-level only
+    if (!it.dest) continue;
+    if (!byDepth[it.depth]) byDepth[it.depth] = [];
+    byDepth[it.depth].push(it);
+  }
+  const depths = Object.keys(byDepth).map(Number).sort((a, b) => a - b);
+  let candidates = [];
+  for (const d of depths) {
+    if (byDepth[d].length >= 3) { candidates = byDepth[d]; break; }
+  }
+  if (candidates.length === 0) return [];
+
+  const points = [];
+  for (const it of candidates) {
     let dest = it.dest;
     if (typeof dest === "string") {
       try { dest = await pdf.getDestination(dest); } catch { continue; }
@@ -247,7 +261,7 @@ async function chaptersFromOutline(pdf, flat, pageOffsets, totalChars) {
     const end = i + 1 < dedup.length
       ? (pageOffsets[dedup[i + 1].page - 1] || totalChars)
       : totalChars;
-    if (end - start < 1500) continue; // skip tiny "chapters" (TOC, dedication)
+    if (end - start < 800) continue; // skip tiny entries (TOC rows, dedications)
     chapters.push({
       index: chapters.length,
       title: dedup[i].title.slice(0, 140),
@@ -270,11 +284,20 @@ export function deriveChaptersFromText(text) {
 }
 
 const CHAPTER_RE_PATTERNS = [
+  // "Capitolo X", "Cap. X"
   /^[ \t]*(?:CAPITOLO|Capitolo|CAP\.?)\s+(?:[IVXLCDM]+|\d+)(?:[\s.:\-—][^\n]{0,140})?$/gm,
+  // "Chapter X"
   /^[ \t]*(?:CHAPTER|Chapter)\s+(?:[IVXLCDM]+|\d+)(?:[\s.:\-—][^\n]{0,140})?$/gm,
+  // "Parte X", "Part X"
   /^[ \t]*(?:PARTE|Parte|PART|Part)\s+(?:[IVXLCDM]+|\d+)(?:[\s.:\-—][^\n]{0,140})?$/gm,
-  // Numbered headings: "1. Titolo della sezione"
-  /^[ \t]*\d{1,2}\s*\.\s+[A-ZÀ-ÝÈÉÌÒÙ][^\n]{4,90}$/gm,
+  // "1. Title" with uppercase
+  /^[ \t]*\d{1,2}\s*\.\s+[A-ZÀ-ÝÈÉÌÒÙ][^\n]{3,90}$/gm,
+  // "1 Title" without dot (very common in many books)
+  /^[ \t]*\d{1,2}\s{1,3}[A-ZÀ-ÝÈÉÌÒÙ][^\n]{3,80}$/gm,
+  // Lone number on a line: "1", "2" … (chapter number as heading, title on next line)
+  /^[ \t]*([1-9]|[12]\d)[ \t]*$/gm,
+  // Common structural keywords (preface, intro, conclusion, etc.)
+  /^[ \t]*(?:PREFAZIONE|INTRODUZIONE|PREMESSA|CONCLUSIONE|EPILOGO|APPENDICE|PREFACE|INTRODUCTION|FOREWORD|CONCLUSION|EPILOGUE|APPENDIX|AFTERWORD)[^\n]{0,80}$/gim,
 ];
 
 function detectChaptersFromText(text) {
@@ -300,7 +323,7 @@ function detectChaptersFromText(text) {
   for (let i = 0; i < filtered.length; i++) {
     const start = filtered[i].start;
     const end = i + 1 < filtered.length ? filtered[i + 1].start : text.length;
-    if (end - start < 1500) continue;
+    if (end - start < 800) continue;
     chapters.push({
       index: chapters.length,
       title: filtered[i].title.replace(/\s+/g, " ").slice(0, 140),
@@ -318,7 +341,7 @@ function syntheticChapters(text) {
   for (let i = 0; i < n; i++) {
     const charStart = i * size;
     const charEnd = Math.min(text.length, (i + 1) * size);
-    if (charEnd - charStart < 1500) continue;
+    if (charEnd - charStart < 800) continue;
     out.push({
       index: out.length,
       title: `Parte ${out.length + 1}`,

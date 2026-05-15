@@ -124,6 +124,7 @@ export default function BookPanel({ book: initialBook, settings, onClose, onMini
       setPhase("generating");
       const model = MODELS[settings.mode] || MODELS.economy;
       let failed = 0;
+      let succeeded = 0;
       for (let i = 0; i < queue.length; i++) {
         if (cancelRef.current.cancelled) break;
         const ch = queue[i];
@@ -148,8 +149,9 @@ export default function BookPanel({ book: initialBook, settings, onClose, onMini
             depth: car.depth || 3,
             quality: car.quality || 3,
           });
+          succeeded++;
           onCarouselReady?.(saved);
-          onGenerationProgress?.({ current: i + 1, total: queue.length, bookTitle: book.title, done: false });
+          onGenerationProgress?.({ current: succeeded, total: queue.length, bookTitle: book.title, done: false });
           const updatedList = await listCarousels(book.id);
           setExisting(updatedList);
         } catch (e) {
@@ -166,7 +168,8 @@ export default function BookPanel({ book: initialBook, settings, onClose, onMini
         : "Completato.";
       setProgress({ current: queue.length, total: queue.length, label: doneLabel });
       setPhase("done");
-      onGenerationProgress?.({ current: queue.length, total: queue.length, bookTitle: book.title, done: true });
+      // Report actual successes (not queue.length) so pill shows real count
+      onGenerationProgress?.({ current: succeeded, total: queue.length, bookTitle: book.title, done: true });
     } catch (e) {
       setError(e.message);
       setPhase("error");

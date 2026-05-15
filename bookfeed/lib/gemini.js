@@ -214,9 +214,13 @@ LIMITI DI CARATTERI (obbligatori — violazioni rompono il layout):
 - Niente emoji, niente hashtag nelle slide.`;
 
   const data = await callWithRotation({ model, system, prompt, jsonMode: true, temperature: 0.8 }, keys);
-  if (!Array.isArray(data?.slides) || data.slides.length !== 10) {
-    throw new Error("Capitolo: serve esattamente 10 slide.");
+  // Accept 6–13 slides: strict !== 10 caused silent failures when Gemini returned 9 or 11
+  const slides = Array.isArray(data?.slides) ? data.slides :
+                 Array.isArray(data) ? data : null;
+  if (!slides || slides.length < 6) {
+    throw new Error(`Capitolo: JSON non valido (${slides?.length ?? 0} slide ricevute, min 6).`);
   }
+  if (!data?.slides) data.slides = slides; // normalise if Gemini returned bare array
   return data;
 }
 
