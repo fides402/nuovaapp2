@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Uploader from "../components/Uploader";
 import Settings from "../components/Settings";
 import Feed from "../components/Feed";
@@ -24,6 +24,8 @@ export default function Home() {
   const [books, setBooks] = useState([]);
   const [carousels, setCarousels] = useState([]);
   const [activeBook, setActiveBook] = useState(null);
+  const [bookPanelOpen, setBookPanelOpen] = useState(false);
+  const [genStatus, setGenStatus] = useState(null); // {current,total,bookTitle,done}
   const [openCarousel, setOpenCarousel] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
@@ -68,6 +70,7 @@ export default function Home() {
       await saveBook(book);
       await refresh();
       setActiveBook(book);
+      setBookPanelOpen(true);
     } catch (e) {
       setError(e.message || String(e));
     } finally {
@@ -81,8 +84,20 @@ export default function Home() {
     (async () => {
       const fresh = await getBook(b.id);
       setActiveBook(fresh || b);
+      setBookPanelOpen(true);
+      setGenStatus(null);
     })();
   }
+
+  // Auto-dismiss status pill 4s after generation completes
+  useEffect(() => {
+    if (!genStatus?.done || bookPanelOpen) return;
+    const t = setTimeout(() => {
+      setActiveBook(null);
+      setGenStatus(null);
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [genStatus?.done, bookPanelOpen]);
 
   async function handleDeleteBook(b) {
     await deleteBook(b.id);
@@ -188,9 +203,36 @@ export default function Home() {
         <BookPanel
           book={activeBook}
           settings={settings}
-          onClose={() => { setActiveBook(null); refresh(); }}
+          open={bookPanelOpen}
+          onClose={() => { setActiveBook(null); setBookPanelOpen(false); setGenStatus(null); refresh(); }}
+          onMinimize={() => setBookPanelOpen(false)}
           onCarouselReady={() => refresh()}
+          onGenerationProgress={(s) => setGenStatus(s)}
         />
+      )}
+
+      {/* Floating generation pill — shown when BookPanel is hidden but still generating */}
+      {activeBook && !bookPanelOpen && genStatus && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 rise">
+          <button
+            onClick={() => setBookPanelOpen(true)}
+            className="flex items-center gap-3 bg-ink text-paper pl-4 pr-5 py-3 rounded-full shadow-2xl text-sm tracking-wide border border-white/10"
+          >
+            {genStatus.done ? (
+              <>
+                <span className="text-[10px] opacity-60 uppercase tracking-[0.18em]">✓</span>
+                <span>{genStatus.current} carosell{genStatus.current !== 1 ? "i" : "o"} pronti</span>
+                <span className="opacity-45 text-[11px]">· apri</span>
+              </>
+            ) : (
+              <>
+                <span className="loading-dot text-[10px]">●</span>
+                <span>{genStatus.current}/{genStatus.total} carosell{genStatus.total !== 1 ? "i" : "o"}</span>
+                <span className="opacity-45 text-[11px]">· apri</span>
+              </>
+            )}
+          </button>
+        </div>
       )}
 
       {openCarousel && (

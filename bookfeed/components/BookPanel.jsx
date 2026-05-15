@@ -12,7 +12,7 @@ import { deriveChaptersFromText } from "../lib/extract";
 // 3) On click, for each selected chapter, send only its candidates to Gemini.
 // 4) Gemini extracts THE insight of that chapter and returns a full 10-slide carousel.
 
-export default function BookPanel({ book: initialBook, settings, onClose, onCarouselReady }) {
+export default function BookPanel({ book: initialBook, settings, onClose, onMinimize, onCarouselReady, onGenerationProgress, open = true }) {
   const [book, setBook] = useState(initialBook);
   const [phase, setPhase] = useState("idle"); // idle | scanning | ready | generating | done | error
   const [error, setError] = useState("");
@@ -149,6 +149,7 @@ export default function BookPanel({ book: initialBook, settings, onClose, onCaro
             quality: car.quality || 3,
           });
           onCarouselReady?.(saved);
+          onGenerationProgress?.({ current: i + 1, total: queue.length, bookTitle: book.title, done: false });
           const updatedList = await listCarousels(book.id);
           setExisting(updatedList);
         } catch (e) {
@@ -165,6 +166,7 @@ export default function BookPanel({ book: initialBook, settings, onClose, onCaro
         : "Completato.";
       setProgress({ current: queue.length, total: queue.length, label: doneLabel });
       setPhase("done");
+      onGenerationProgress?.({ current: queue.length, total: queue.length, bookTitle: book.title, done: true });
     } catch (e) {
       setError(e.message);
       setPhase("error");
@@ -176,10 +178,18 @@ export default function BookPanel({ book: initialBook, settings, onClose, onCaro
   const totalCandidates = Object.values(chapterCands).reduce((s, arr) => s + (arr?.length || 0), 0);
 
   return (
-    <div className="fixed inset-0 z-40 bg-paper/95 backdrop-blur-md overflow-y-auto rise">
+    <div
+      className="fixed inset-0 z-40 bg-paper/95 backdrop-blur-md overflow-y-auto rise"
+      style={!open ? { visibility: "hidden", pointerEvents: "none" } : undefined}
+    >
       <div className="max-w-2xl mx-auto px-5 py-8">
         <div className="flex items-center justify-between mb-6">
-          <button onClick={onClose} className="btn btn-ghost px-3 py-1.5 text-sm">← Indietro</button>
+          <button
+            onClick={phase === "generating" ? onMinimize : onClose}
+            className="btn btn-ghost px-3 py-1.5 text-sm"
+          >
+            {phase === "generating" ? "← Torna al feed" : "← Indietro"}
+          </button>
           <div className="text-[11px] uppercase tracking-[0.22em] text-muted">
             {book.format?.toUpperCase()} · {Math.round((book.totalChars || 0) / 1000)}k caratteri · {chapters.length} capitoli
           </div>
