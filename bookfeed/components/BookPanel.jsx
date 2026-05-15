@@ -20,6 +20,8 @@ export default function BookPanel({ book: initialBook, settings, onClose, onMini
   const [brief, setBrief] = useState(null);
   const [selected, setSelected] = useState(new Set());
   const [progress, setProgress] = useState({ current: 0, total: 0, label: "" });
+  const [lastErr, setLastErr] = useState("");   // last chapter error, shown while generating
+  const [genSucceeded, setGenSucceeded] = useState(0); // chapters successfully saved in last run
   const [existing, setExisting] = useState([]);
   const cancelRef = useRef({ cancelled: false });
 
@@ -125,6 +127,8 @@ export default function BookPanel({ book: initialBook, settings, onClose, onMini
       const model = MODELS[settings.mode] || MODELS.economy;
       let failed = 0;
       let succeeded = 0;
+      setLastErr("");
+      setGenSucceeded(0);
       for (let i = 0; i < queue.length; i++) {
         if (cancelRef.current.cancelled) break;
         const ch = queue[i];
@@ -150,17 +154,20 @@ export default function BookPanel({ book: initialBook, settings, onClose, onMini
             quality: car.quality || 3,
           });
           succeeded++;
+          setGenSucceeded(succeeded);
           onCarouselReady?.(saved);
           onGenerationProgress?.({ current: succeeded, total: queue.length, bookTitle: book.title, done: false });
           const updatedList = await listCarousels(book.id);
           setExisting(updatedList);
         } catch (e) {
           failed++;
+          const msg = String(e?.message || e).slice(0, 180);
+          setLastErr(`Capitolo "${ch.title}": ${msg}`);
           console.warn("Chapter carousel failed:", ch.title, e);
         }
-        // Brief pause between chapters — avoids hitting rate limits on long batches
+        // Pause between chapters — 2.5s gives rate-limited APIs time to recover
         if (i < queue.length - 1 && !cancelRef.current.cancelled) {
-          await new Promise((r) => setTimeout(r, 1200));
+          await new Promise((r) => setTimeout(r, 2500));
         }
       }
       const doneLabel = failed > 0
@@ -282,6 +289,16 @@ export default function BookPanel({ book: initialBook, settings, onClose, onMini
                   style={{ width: `${Math.round(((progress.current || 0) / (progress.total || 1)) * 100)}%` }}
                 />
               </div>
+              {lastErr && (
+                <div className="text-xs text-red-400/80 break-words leading-snug pt-1">
+                  ⚠ {lastErr}
+                </div>
+              )}
+            </div>
+          )}
+          {phase === "done" && genSucceeded === 0 && (
+            <div className="mt-3 text-sm text-red-400 break-words leading-snug">
+              Nessun carosello generato.{lastErr ? ` Errore: ${lastErr}` : " Ricontrolla la API key nelle Impostazioni."}
             </div>
           )}
           {phase === "error" && <div className="mt-3 text-sm text-red-300">{error}</div>}
