@@ -596,13 +596,15 @@ Rispondi in ${lang} con questo JSON esatto:
 {
   "recommendations": [
     {
-      "title": "Titolo originale del libro",
+      "title": "Titolo del libro",
       "author": "Nome Cognome autore",
       "reason": "Spiega il collegamento preciso con un argomento specifico trovato nel testo delle slide.",
       "topics": ["topic specifico 1", "topic specifico 2"]
     }
   ]
-}`;
+}
+
+REGOLA SUL TITOLO: se l'autore non è italiano, usa il titolo in inglese (titolo originale inglese o traduzione inglese). Se l'autore è italiano, usa il titolo italiano.`;
 
   const geminiKeys = (keys || []).filter(Boolean);
   const hasGroq = (groqKeys || []).some(Boolean);
