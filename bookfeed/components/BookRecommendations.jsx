@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { generateBookRecommendations } from "../lib/gemini";
 
-export default function BookRecommendations({ likedCarousels, settings }) {
+export default function BookRecommendations({ likedCarousels, books, settings }) {
   const [recs, setRecs] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -13,8 +13,11 @@ export default function BookRecommendations({ likedCarousels, settings }) {
     setError("");
     setLoading(true);
     try {
+      // books come { id → { title, author } } map
+      const booksMap = Object.fromEntries((books || []).map((b) => [b.id, { title: b.title, author: b.author }]));
       const result = await generateBookRecommendations({
         likedCarousels,
+        books: booksMap,
         keys: settings.apiKeys,
         groqKeys: settings.groqApiKeys,
         openRouterKeys: settings.openRouterKeys,

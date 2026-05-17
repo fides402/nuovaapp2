@@ -205,6 +205,7 @@ export default function Home() {
             </div>
             <BookRecommendations
               likedCarousels={carousels.filter((c) => c.liked)}
+              books={books}
               settings={settings}
             />
           </div>

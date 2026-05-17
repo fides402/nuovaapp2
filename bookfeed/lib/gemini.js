@@ -545,33 +545,61 @@ Lingua: ${language === "it" ? "italiano" : "inglese"}.`;
 
 // ── Book recommendations ───────────────────────────────────────────────────────
 // Analizza i caroselli con like e suggerisce libri che approfondiscono quei temi.
-export async function generateBookRecommendations({ likedCarousels, keys, groqKeys, openRouterKeys, language = "it" }) {
+// books: mappa { id → { title, author } } per arricchire i caroselli col libro di origine.
+export async function generateBookRecommendations({ likedCarousels, books = {}, keys, groqKeys, openRouterKeys, language = "it" }) {
   if (!likedCarousels || likedCarousels.length === 0) {
     throw new Error("Nessun carosello preferito. Metti ♥ ad alcuni caroselli prima.");
   }
 
-  const summary = likedCarousels.slice(0, 24).map((c) =>
-    `- "${c.title}"${c.chapter?.title ? ` (cap. "${c.chapter.title}")` : ""}${c.concept ? `: ${c.concept}` : ""}${c.tags?.length ? ` [${c.tags.slice(0, 4).join(", ")}]` : ""}`
-  ).join("\n");
+  // Costruisce un riassunto ricco: libro di origine + concetto + testo reale delle slide chiave
+  const summary = likedCarousels.slice(0, 16).map((c, i) => {
+    const srcBook = books[c.bookId];
+    const srcLine = srcBook ? `Estratto da: "${srcBook.title}"${srcBook.author ? ` di ${srcBook.author}` : ""}` : "";
+    // Prendi il corpo delle slide più significative (hook, core, synthesis)
+    const keySlides = (c.slides || [])
+      .filter((s) => ["hook", "core", "synthesis", "explanation", "tension"].includes(s.role))
+      .slice(0, 4)
+      .map((s) => `    • [${s.role}] ${s.title ? s.title + ": " : ""}${s.body || ""}`)
+      .join("\n");
+    return [
+      `--- Carosello ${i + 1} ---`,
+      srcLine,
+      `Titolo: "${c.title}"`,
+      c.concept ? `Concetto: ${c.concept}` : "",
+      c.tags?.length ? `Tag: ${c.tags.join(", ")}` : "",
+      keySlides ? `Contenuto slide:\n${keySlides}` : "",
+    ].filter(Boolean).join("\n");
+  }).join("\n\n");
+
+  // Estrai i libri già letti per non consigliarli
+  const alreadyRead = [...new Set(
+    Object.values(books).map((b) => `"${b.title}" di ${b.author}`).filter(Boolean)
+  )].join(", ");
 
   const lang = language === "it" ? "italiano" : "inglese";
-  const system = `Sei un bibliotecario colto e curioso. Analizzi i temi di interesse dell'utente e consigli libri che li approfondiscono o li espandono in modo sorprendente. Rispondi SOLO con JSON valido, nessun testo fuori dal JSON.`;
+  const system = `Sei un bibliotecario specializzato, preciso e curioso. Il tuo compito è consigliare libri SPECIFICI e PERTINENTI basandoti sul contenuto testuale esatto dei caroselli che l'utente ha apprezzato — non sui temi generali. Evita libri famosi e generici se non sono direttamente legati agli argomenti precisi. Privilegia libri di nicchia, accademici, pratici o poco noti ma altamente pertinenti. Rispondi SOLO con JSON valido, nessun testo fuori dal JSON.`;
 
-  const prompt = `L'utente ha messo "mi piace" a questi caroselli estratti da libri:
+  const prompt = `L'utente ha messo "mi piace" a questi caroselli. Leggi attentamente il contenuto testuale delle slide per capire gli argomenti PRECISI che lo interessano:
 
 ${summary}
 
-Consiglia 8 libri (non quelli già letti — usa titoli e autori diversi dai libri citati nei caroselli).
-Diversifica: romanzi, saggi, manuali pratici, classici, contemporanei.
-Spiega perché ogni libro espande esattamente i temi che interessano l'utente.
+${alreadyRead ? `Libri già letti dall'utente (NON consigliare questi): ${alreadyRead}` : ""}
+
+Basandoti sugli argomenti SPECIFICI nel testo delle slide (non sui tag generici), consiglia 8 libri.
+REGOLE IMPORTANTI:
+- Consiglia libri strettamente legati agli argomenti precisi nel testo, non ai temi generali
+- Preferisci libri specifici, accademici o di nicchia rispetto a bestseller generici
+- Ogni libro deve essere giustificato citando un argomento specifico trovato nelle slide
+- NON consigliare: Sapiens, Il Signore degli Anelli, L'Alchimista, Atomic Habits e simili a meno che non siano davvero pertinenti al contenuto preciso
+
 Rispondi in ${lang} con questo JSON esatto:
 {
   "recommendations": [
     {
       "title": "Titolo originale del libro",
       "author": "Nome Cognome autore",
-      "reason": "2-3 frasi su perché questo libro espande i temi nei caroselli preferiti.",
-      "topics": ["topic1", "topic2", "topic3"]
+      "reason": "Spiega il collegamento preciso con un argomento specifico trovato nel testo delle slide.",
+      "topics": ["topic specifico 1", "topic specifico 2"]
     }
   ]
 }`;
