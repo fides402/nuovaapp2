@@ -641,8 +641,14 @@ REGOLA FONDAMENTALE: consiglia SOLO libri reali e verificabili che esistono davv
     throw new Error("Nessuna API key configurata. Aggiungila nelle Impostazioni.");
   }
 
-  if (!Array.isArray(raw?.recommendations) || raw.recommendations.length === 0) {
+  // Normalizza la risposta: alcuni modelli restituiscono array diretto,
+  // altri usano chiavi diverse, altri wrappano in un oggetto
+  let recs = raw?.recommendations ?? raw?.books ?? raw?.results ?? raw?.suggestions;
+  if (!Array.isArray(recs) && Array.isArray(raw)) recs = raw;
+  // Filtra eventuali elementi malformati (senza title o author)
+  if (Array.isArray(recs)) recs = recs.filter((r) => r?.title && r?.author);
+  if (!Array.isArray(recs) || recs.length === 0) {
     throw new Error("Formato risposta non valido. Riprova.");
   }
-  return raw.recommendations;
+  return recs;
 }
