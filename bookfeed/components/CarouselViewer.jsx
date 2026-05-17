@@ -5,7 +5,7 @@ import SlideRenderer from "./SlideRenderer";
 import Pinchable from "./Pinchable";
 import { exportCarouselAsPdf, exportCarouselAsZipPng, exportSlideAsPng } from "../lib/exporter";
 
-export default function CarouselViewer({ carousel, book, onClose, onDelete }) {
+export default function CarouselViewer({ carousel, book, onClose, onDelete, onToggleLike }) {
   const [idx, setIdx] = useState(0);
   const [invert, setInvert] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -57,6 +57,15 @@ export default function CarouselViewer({ carousel, book, onClose, onDelete }) {
         <div className="flex items-center justify-between mb-4 gap-2">
           <button onClick={onClose} className="btn btn-ghost px-3 py-1.5 text-sm">← Chiudi</button>
           <div className="flex items-center gap-2 relative">
+            {onToggleLike && (
+              <button
+                onClick={() => onToggleLike(carousel)}
+                className={`btn btn-ghost px-3 py-1.5 text-lg leading-none transition-all ${carousel?.liked ? "text-red-400" : "text-muted"}`}
+                title={carousel?.liked ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
+              >
+                {carousel?.liked ? "♥" : "♡"}
+              </button>
+            )}
             <button onClick={() => setInvert((v) => !v)} className="btn btn-ghost px-3 py-1.5 text-sm" title="Inverti tema slide">
               {invert ? "Tema scuro" : "Tema chiaro"}
             </button>

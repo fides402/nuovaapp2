@@ -1,6 +1,6 @@
 "use client";
 
-export default function Feed({ books, carousels, onOpenCarousel, onOpenBook, onDeleteBook }) {
+export default function Feed({ books, carousels, onOpenCarousel, onOpenBook, onDeleteBook, onToggleLike }) {
   if (!books.length) return null;
   return (
     <div className="space-y-8">
@@ -26,10 +26,10 @@ export default function Feed({ books, carousels, onOpenCarousel, onOpenBook, onD
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[...list].sort(byChapterOrTime).map((c) => (
-                  <button
+                  <div
                     key={c.id}
                     onClick={() => onOpenCarousel(c, b)}
-                    className="card p-4 text-left hover:border-ink transition-colors group"
+                    className="card p-4 text-left hover:border-ink transition-colors group cursor-pointer relative"
                   >
                     <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.22em] text-muted">
                       <span className="truncate">
@@ -44,7 +44,7 @@ export default function Feed({ books, carousels, onOpenCarousel, onOpenBook, onD
                         {c.chapter.title}
                       </div>
                     )}
-                    <h4 className="font-serif text-lg leading-snug mt-2 group-hover:underline underline-offset-4 decoration-1">
+                    <h4 className="font-serif text-lg leading-snug mt-2 group-hover:underline underline-offset-4 decoration-1 pr-7">
                       {c.title}
                     </h4>
                     {c.concept && <p className="text-sm text-muted mt-1 line-clamp-2">{c.concept}</p>}
@@ -55,7 +55,15 @@ export default function Feed({ books, carousels, onOpenCarousel, onOpenBook, onD
                         ))}
                       </div>
                     )}
-                  </button>
+                    {/* Like button */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onToggleLike?.(c); }}
+                      className={`absolute top-3 right-3 text-lg leading-none transition-all ${c.liked ? "text-red-400 scale-110" : "text-muted opacity-0 group-hover:opacity-60"}`}
+                      title={c.liked ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
+                    >
+                      {c.liked ? "♥" : "♡"}
+                    </button>
+                  </div>
                 ))}
               </div>
             )}

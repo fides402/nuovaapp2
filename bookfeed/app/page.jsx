@@ -6,6 +6,7 @@ import Settings from "../components/Settings";
 import Feed from "../components/Feed";
 import BookPanel from "../components/BookPanel";
 import CarouselViewer from "../components/CarouselViewer";
+import BookRecommendations from "../components/BookRecommendations";
 import { extractFromFile, hashFile } from "../lib/extract";
 import {
   DEFAULT_SETTINGS,
@@ -15,6 +16,7 @@ import {
   listCarousels,
   deleteBook,
   deleteCarousel,
+  toggleCarouselLike,
   getBook,
 } from "../lib/storage";
 
@@ -110,6 +112,18 @@ export default function Home() {
     setOpenCarousel(null);
   }
 
+  async function handleToggleLike(c) {
+    const updated = await toggleCarouselLike(c.bookId, c.id);
+    if (!updated) return;
+    // Update carousels state in-place (no full reload needed)
+    setCarousels((prev) => prev.map((x) => x.id === c.id ? { ...x, liked: updated.liked } : x));
+    // If viewer is open for this carousel, sync its state too
+    setOpenCarousel((prev) => {
+      if (!prev || prev.carousel.id !== c.id) return prev;
+      return { ...prev, carousel: { ...prev.carousel, liked: updated.liked } };
+    });
+  }
+
   const hasKey = (settings.apiKeys || []).some(Boolean);
 
   return (
@@ -172,19 +186,26 @@ export default function Home() {
 
         {/* Feed */}
         {books.length > 0 ? (
-          <div className="pt-2">
-            <div className="flex items-baseline justify-between mb-4">
-              <h2 className="font-serif text-2xl">Il tuo feed</h2>
-              <div className="text-[11px] uppercase tracking-[0.22em] text-muted">
-                {carousels.length} caroselli · {books.length} libri
+          <div className="pt-2 space-y-10">
+            <div>
+              <div className="flex items-baseline justify-between mb-4">
+                <h2 className="font-serif text-2xl">Il tuo feed</h2>
+                <div className="text-[11px] uppercase tracking-[0.22em] text-muted">
+                  {carousels.length} caroselli · {books.length} libri
+                </div>
               </div>
+              <Feed
+                books={books}
+                carousels={carousels}
+                onOpenCarousel={(c, b) => setOpenCarousel({ carousel: c, book: b })}
+                onOpenBook={openBook}
+                onDeleteBook={handleDeleteBook}
+                onToggleLike={handleToggleLike}
+              />
             </div>
-            <Feed
-              books={books}
-              carousels={carousels}
-              onOpenCarousel={(c, b) => setOpenCarousel({ carousel: c, book: b })}
-              onOpenBook={openBook}
-              onDeleteBook={handleDeleteBook}
+            <BookRecommendations
+              likedCarousels={carousels.filter((c) => c.liked)}
+              settings={settings}
             />
           </div>
         ) : (
@@ -244,6 +265,7 @@ export default function Home() {
           book={openCarousel.book}
           onClose={() => setOpenCarousel(null)}
           onDelete={() => handleDeleteCarousel(openCarousel.carousel)}
+          onToggleLike={handleToggleLike}
         />
       )}
     </main>

@@ -68,6 +68,14 @@ export async function listCarousels(bookId = null) {
 export async function deleteCarousel(bookId, carouselId) {
   await del(FEED_PREFIX + bookId + ":" + carouselId);
 }
+export async function toggleCarouselLike(bookId, carouselId) {
+  const key = FEED_PREFIX + bookId + ":" + carouselId;
+  const c = await get(key);
+  if (!c) return null;
+  c.liked = !c.liked;
+  await set(key, c);
+  return c;
+}
 
 function cryptoId() {
   const a = new Uint8Array(8);

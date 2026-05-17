@@ -542,3 +542,67 @@ Lingua: ${language === "it" ? "italiano" : "inglese"}.`;
   }
   return data;
 }
+
+// ── Book recommendations ───────────────────────────────────────────────────────
+// Analizza i caroselli con like e suggerisce libri che approfondiscono quei temi.
+export async function generateBookRecommendations({ likedCarousels, keys, groqKeys, openRouterKeys, language = "it" }) {
+  if (!likedCarousels || likedCarousels.length === 0) {
+    throw new Error("Nessun carosello preferito. Metti ♥ ad alcuni caroselli prima.");
+  }
+
+  const summary = likedCarousels.slice(0, 24).map((c) =>
+    `- "${c.title}"${c.chapter?.title ? ` (cap. "${c.chapter.title}")` : ""}${c.concept ? `: ${c.concept}` : ""}${c.tags?.length ? ` [${c.tags.slice(0, 4).join(", ")}]` : ""}`
+  ).join("\n");
+
+  const lang = language === "it" ? "italiano" : "inglese";
+  const system = `Sei un bibliotecario colto e curioso. Analizzi i temi di interesse dell'utente e consigli libri che li approfondiscono o li espandono in modo sorprendente. Rispondi SOLO con JSON valido, nessun testo fuori dal JSON.`;
+
+  const prompt = `L'utente ha messo "mi piace" a questi caroselli estratti da libri:
+
+${summary}
+
+Consiglia 8 libri (non quelli già letti — usa titoli e autori diversi dai libri citati nei caroselli).
+Diversifica: romanzi, saggi, manuali pratici, classici, contemporanei.
+Spiega perché ogni libro espande esattamente i temi che interessano l'utente.
+Rispondi in ${lang} con questo JSON esatto:
+{
+  "recommendations": [
+    {
+      "title": "Titolo originale del libro",
+      "author": "Nome Cognome autore",
+      "reason": "2-3 frasi su perché questo libro espande i temi nei caroselli preferiti.",
+      "topics": ["topic1", "topic2", "topic3"]
+    }
+  ]
+}`;
+
+  const geminiKeys = (keys || []).filter(Boolean);
+  const hasGroq = (groqKeys || []).some(Boolean);
+  const hasOpenRouter = (openRouterKeys || []).some(Boolean);
+
+  let raw;
+  if (geminiKeys.length > 0) {
+    try {
+      raw = await callWithRotation({ model: "gemini-2.5-flash", system, prompt, jsonMode: true, temperature: 0.9 }, geminiKeys);
+    } catch {
+      if (hasGroq) {
+        try { raw = await callGroqWithRotation({ system, prompt, temperature: 0.9 }, groqKeys); }
+        catch { if (hasOpenRouter) raw = await callOpenRouterWithRotation({ system, prompt, temperature: 0.9 }, openRouterKeys); else throw; }
+      } else if (hasOpenRouter) {
+        raw = await callOpenRouterWithRotation({ system, prompt, temperature: 0.9 }, openRouterKeys);
+      } else throw new Error("Nessuna API key configurata.");
+    }
+  } else if (hasGroq) {
+    try { raw = await callGroqWithRotation({ system, prompt, temperature: 0.9 }, groqKeys); }
+    catch { if (hasOpenRouter) raw = await callOpenRouterWithRotation({ system, prompt, temperature: 0.9 }, openRouterKeys); else throw; }
+  } else if (hasOpenRouter) {
+    raw = await callOpenRouterWithRotation({ system, prompt, temperature: 0.9 }, openRouterKeys);
+  } else {
+    throw new Error("Nessuna API key configurata. Aggiungila nelle Impostazioni.");
+  }
+
+  if (!Array.isArray(raw?.recommendations) || raw.recommendations.length === 0) {
+    throw new Error("Formato risposta non valido. Riprova.");
+  }
+  return raw.recommendations;
+}
