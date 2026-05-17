@@ -59,12 +59,22 @@ export default function Settings({ open, onClose, onSaved }) {
             />
           </div>
           <div>
-            <label className="label">Google AI API key · backup (opzionale)</label>
+            <label className="label">Google AI API key · backup 1 (opzionale)</label>
             <input
               className="input font-mono text-[13px]"
               type={reveal ? "text" : "password"}
               value={s.apiKeys?.[1] || ""}
               onChange={(e) => setKey(1, e.target.value)}
+              placeholder="AIza…"
+            />
+          </div>
+          <div>
+            <label className="label">Google AI API key · backup 2 (opzionale)</label>
+            <input
+              className="input font-mono text-[13px]"
+              type={reveal ? "text" : "password"}
+              value={s.apiKeys?.[2] || ""}
+              onChange={(e) => setKey(2, e.target.value)}
               placeholder="AIza…"
             />
           </div>
