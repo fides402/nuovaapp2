@@ -604,7 +604,9 @@ Rispondi in ${lang} con questo JSON esatto:
   ]
 }
 
-REGOLA SUL TITOLO: se l'autore non è italiano, usa il titolo in inglese (titolo originale inglese o traduzione inglese). Se l'autore è italiano, usa il titolo italiano.`;
+REGOLA SUL TITOLO: se l'autore non è italiano, usa il titolo in inglese (titolo originale inglese o traduzione inglese). Se l'autore è italiano, usa il titolo italiano.
+
+REGOLA FONDAMENTALE: consiglia SOLO libri reali e verificabili che esistono davvero. Se non sei assolutamente certo che un libro esista con quel titolo e quell'autore, non includerlo. È meglio consigliare meno libri certi che includere titoli inventati o errati.`;
 
   const geminiKeys = (keys || []).filter(Boolean);
   const hasGroq = (groqKeys || []).some(Boolean);
