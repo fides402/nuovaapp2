@@ -584,17 +584,25 @@ Rispondi in ${lang} con questo JSON esatto:
   if (geminiKeys.length > 0) {
     try {
       raw = await callWithRotation({ model: "gemini-2.5-flash", system, prompt, jsonMode: true, temperature: 0.9 }, geminiKeys);
-    } catch {
+    } catch (_geminiErr) {
       if (hasGroq) {
         try { raw = await callGroqWithRotation({ system, prompt, temperature: 0.9 }, groqKeys); }
-        catch { if (hasOpenRouter) raw = await callOpenRouterWithRotation({ system, prompt, temperature: 0.9 }, openRouterKeys); else throw; }
+        catch (_groqErr) {
+          if (hasOpenRouter) raw = await callOpenRouterWithRotation({ system, prompt, temperature: 0.9 }, openRouterKeys);
+          else throw _groqErr;
+        }
       } else if (hasOpenRouter) {
         raw = await callOpenRouterWithRotation({ system, prompt, temperature: 0.9 }, openRouterKeys);
-      } else throw new Error("Nessuna API key configurata.");
+      } else {
+        throw _geminiErr;
+      }
     }
   } else if (hasGroq) {
     try { raw = await callGroqWithRotation({ system, prompt, temperature: 0.9 }, groqKeys); }
-    catch { if (hasOpenRouter) raw = await callOpenRouterWithRotation({ system, prompt, temperature: 0.9 }, openRouterKeys); else throw; }
+    catch (_groqErr) {
+      if (hasOpenRouter) raw = await callOpenRouterWithRotation({ system, prompt, temperature: 0.9 }, openRouterKeys);
+      else throw _groqErr;
+    }
   } else if (hasOpenRouter) {
     raw = await callOpenRouterWithRotation({ system, prompt, temperature: 0.9 }, openRouterKeys);
   } else {
